@@ -74,6 +74,24 @@ public abstract class CompilerTest_regressions<Method_Type extends IrMethod> ext
         return previous;
     }
 
+
+    private static native void nativeMethod1();
+
+    public static float callerSaveMethod(float f2) {
+        final float f1 = 1.5f;
+        final float f3 = f2 * f1;
+        nativeMethod1();
+        return f3 / f1;
+    }
+
+    public void test_sparcRegression() {
+        compileMethod("nativeMethod1");
+    }
+
+    public void test_sparcRegression2() {
+        compileMethod("callerSaveMethod", SignatureDescriptor.create(float.class, float.class));
+    }
+
     // Copy of java.lang.StringCode.scale
     public static int scale(int len, float expansionFactor) {
         // We need to perform double, not float, arithmetic; otherwise
@@ -81,7 +99,16 @@ public abstract class CompilerTest_regressions<Method_Type extends IrMethod> ext
         return (int) (len * (double) expansionFactor);
     }
 
-    public void test_sparcRegression() {
+    public void test_StringCoding() {
+        // compileMethod("callerSaveMethod", SignatureDescriptor.create(float.class, float.class));
+        compileMethod("scale", SignatureDescriptor.create(int.class, int.class, float.class));
+    }
+
+    public void test_compileDynamicLinker() {
+        compileMethod(DynamicLinker.class, "doLoad");
+    }
+
+    public void test_FloatingPointRegisterAliasing() {
         compileMethod("scale", SignatureDescriptor.create(int.class, int.class, float.class));
     }
 
