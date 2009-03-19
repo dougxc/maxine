@@ -174,6 +174,9 @@ public abstract class TeleNativeThread implements Comparable<TeleNativeThread>, 
      * thread last stopped.
      */
     public Sequence<StackFrame> frames() {
+        if (!isJava()) {
+            return Sequence.Static.empty(StackFrame.class);
+        }
         return _frames;
     }
 
@@ -429,7 +432,7 @@ public abstract class TeleNativeThread implements Comparable<TeleNativeThread>, 
      * instruction.
      */
     public void evadeBreakpoint() throws OSExecutionRequestException {
-        if (_breakpoint != null) {
+        if (_breakpoint != null && !_breakpoint.isTransient()) {
             assert !_breakpoint.isActivated() : "Cannot single step at an activated breakpoint";
             teleProcess().singleStep(this);
         }

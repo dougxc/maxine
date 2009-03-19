@@ -167,16 +167,11 @@ public abstract class TeleProcess extends AbstractTeleVMHolder implements TeleIO
                 throwable.printStackTrace();
                 ThrowableDialog.showLater(throwable, null, tracePrefix() + "Uncaught exception while processing " + request);
             } finally {
-                synchronized (_synchronizedWaitersLock) {
-                    if (_synchronizedWaiters > 0) {
-                        _synchronizedWaitersLock.notifyAll();
-                    }
-                }
+                Trace.begin(TRACE_VALUE, tracePrefix() + "notifying completion of request: " + request);
+                request.notifyOfCompletion();
+                Trace.end(TRACE_VALUE, tracePrefix() + "notifying completion of request: " + request);
             }
         }
-
-        private int _synchronizedWaiters;
-        private final Object _synchronizedWaitersLock = new Object();
 
         private String traceSuffix(boolean synchronous) {
             return " (" + (synchronous ? "synchronous" : "asynchronous") + ")";
@@ -211,18 +206,9 @@ public abstract class TeleProcess extends AbstractTeleVMHolder implements TeleIO
         }
 
         private void waitForSynchronousRequestToComplete(TeleEventRequest request) {
-            synchronized (_synchronizedWaitersLock) {
-                _synchronizedWaiters++;
-                Trace.begin(TRACE_VALUE, tracePrefix() + "waiting for synchronous request to complete: " + request);
-                try {
-                    // Wait for tele process event handling thread to handle this process request:
-                    _synchronizedWaitersLock.wait();
-                    _synchronizedWaiters--;
-                } catch (InterruptedException interruptedException) {
-                    interruptedException.printStackTrace();
-                }
-                Trace.end(TRACE_VALUE, tracePrefix() + "waiting for synchronous request to complete: " + request);
-            }
+            Trace.begin(TRACE_VALUE, tracePrefix() + "waiting for synchronous request to complete: " + request);
+            request.waitUntilComplete();
+            Trace.end(TRACE_VALUE, tracePrefix() + "waiting for synchronous request to complete: " + request);
         }
 
         private void execute(TeleEventRequest request, boolean isNested) {
@@ -541,6 +527,20 @@ public abstract class TeleProcess extends AbstractTeleVMHolder implements TeleIO
 
     protected abstract void gatherThreads(AppendableSequence<TeleNativeThread> threads);
 
+    /**
+     * Gets the thread corresponding to a given thread id and state.
+     */
+    protected final TeleNativeThread idAndStateToThread(long id, long triggeredVmThreadLocals, long enabledVmThreadLocals, long disabledVmThreadLocals) {
+        final TeleNativeThread thread = (TeleNativeThread) idToThread(id);
+        if (thread != null) {
+            final boolean isJava = triggeredVmThreadLocals != 0 && enabledVmThreadLocals != 0 && disabledVmThreadLocals != 0;
+            if (thread.isJava() != isJava) {
+                return null;
+            }
+        }
+        return thread;
+    }
+
     private long _epoch;
 
     /**
@@ -588,7 +588,7 @@ public abstract class TeleProcess extends AbstractTeleVMHolder implements TeleIO
             newThreadMap.put(thread.id(), thread);
             final TeleNativeThread oldThread = _threadMap.get(thread.id());
             if (oldThread != null) {
-                assert oldThread == thread;
+                assert oldThread == thread || (oldThread.isJava() != thread.isJava());
                 _deadThreads.remove(thread);
                 Trace.line(TRACE_VALUE, "    "  + thread);
             } else {
