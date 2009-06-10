@@ -51,15 +51,23 @@ public class C1XTest {
     private static final Option<Boolean> _clinit = _options.newBooleanOption("clinit", true,
         "Compile class initializer (<clinit>) methods");
     private static final Option<Boolean> _failFast = _options.newBooleanOption("fail-fast", true,
-        "Stop compilation upon the first bailout");
+        "Stop compilation upon the first bailout.");
     private static final Option<Boolean> _timing = _options.newBooleanOption("timing", false,
         "Report compilation time for each successful compile.");
+    private static final Option<Boolean> _help = _options.newBooleanOption("help", false,
+        "Show help message and exit.");
 
     private static final List<Timing> _timings = new ArrayList<Timing>();
 
     public static void main(String[] args) {
         _options.parseArguments(args);
         final String[] arguments = _options.getArguments();
+
+        if (_help.getValue()) {
+            _options.printHelp(System.out, 80);
+            return;
+        }
+
         Trace.on(_trace.getValue());
 
         // create the prototype
