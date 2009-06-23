@@ -30,7 +30,7 @@ import com.sun.c1x.value.*;
  * @author Ben L. Titzer
  */
 public class StoreField extends AccessField {
-    Instruction _value;
+    Instruction value;
 
     /**
      * Creates a new LoadField instance.
@@ -46,7 +46,7 @@ public class StoreField extends AccessField {
      */
     public StoreField(Instruction object, int offset, CiField field, Instruction value, boolean isStatic, ValueStack lockStack, ValueStack stateBefore, boolean isLoaded, boolean isInitialized) {
         super(object, offset, field, isStatic, lockStack, stateBefore, isLoaded, isInitialized);
-        _value = value;
+        this.value = value;
         setFlag(Flag.NeedsWriteBarrier);
     }
 
@@ -55,7 +55,7 @@ public class StoreField extends AccessField {
      * @return the value
      */
     public Instruction value() {
-        return _value;
+        return value;
     }
 
     /**
@@ -74,7 +74,7 @@ public class StoreField extends AccessField {
     @Override
     public void inputValuesDo(InstructionClosure closure) {
         super.inputValuesDo(closure);
-        _value = closure.apply(_value);
+        value = closure.apply(value);
     }
 
     /**

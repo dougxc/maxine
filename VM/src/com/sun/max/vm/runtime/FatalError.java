@@ -129,7 +129,7 @@ public final class FatalError extends Error {
             Log.print("Caused by: ");
             throwable.printStackTrace(Log.out);
         }
-        if (Throw._scanStackOnFatalError.getValue()) {
+        if (Throw.scanStackOnFatalError.getValue()) {
             Throw.stackScan("stack scan", VMRegister.getCpuStackPointer(), VmThread.current().vmThreadLocals());
         }
         Log.unlock(lockDisabledSafepoints);

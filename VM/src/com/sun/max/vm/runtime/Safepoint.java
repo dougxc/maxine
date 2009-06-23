@@ -214,11 +214,7 @@ public abstract class Safepoint {
 
     protected abstract byte[] createCode();
 
-    private final byte[] code = createCode();
-
-    public final byte[] code() {
-        return code;
-    }
+    public final byte[] code = createCode();
 
     public boolean isAt(Pointer instructionPointer) {
         return Memory.equals(instructionPointer, code);

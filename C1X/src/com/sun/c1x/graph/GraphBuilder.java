@@ -173,7 +173,7 @@ public class GraphBuilder {
 
     void pushRootScope(IRScope scope, BlockMap blockMap, BlockBegin start) {
         BytecodeStream stream = new BytecodeStream(scope.method.code());
-        CiConstantPool constantPool = compilation._runtime.getConstantPool(scope.method);
+        CiConstantPool constantPool = compilation.runtime.getConstantPool(scope.method);
         scopeData = new ScopeData(null, scope, blockMap, stream, constantPool);
         curBlock = start;
     }
@@ -1363,7 +1363,7 @@ public class GraphBuilder {
         calleeScope.setStoresInLoops(blockMap.getStoresInLoops());
         curState = curState.pushScope(calleeScope);
         BytecodeStream stream = new BytecodeStream(target.code());
-        CiConstantPool constantPool = compilation._runtime.getConstantPool(target);
+        CiConstantPool constantPool = compilation.runtime.getConstantPool(target);
         ScopeData data = new ScopeData(scopeData, calleeScope, blockMap, stream, constantPool);
         data.setContinuation(continuation);
         scopeData = data;
@@ -1424,10 +1424,10 @@ public class GraphBuilder {
         if (!target.holder().isInitialized()) {
             return cannotInline(target, "holder is not initialized");
         }
-        if (compilation._runtime.mustNotInline(target)) {
+        if (compilation.runtime.mustNotInline(target)) {
             return cannotInline(target, "inlining excluded by runtime");
         }
-        if (compilation._runtime.mustNotCompile(target)) {
+        if (compilation.runtime.mustNotCompile(target)) {
             return cannotInline(target, "compile excluded by runtime");
         }
         if (target.isAbstract()) {

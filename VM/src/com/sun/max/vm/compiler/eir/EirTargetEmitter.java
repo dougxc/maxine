@@ -160,8 +160,8 @@ public abstract class EirTargetEmitter<Assembler_Type extends Assembler> {
             targetJavaFrameDescriptor = new TargetJavaFrameDescriptor(eirToTargetJavaFrameDescriptor(eirJavaFrameDescriptor.parent()),
                                                                       eirJavaFrameDescriptor.classMethodActor(),
                                                                       eirJavaFrameDescriptor.bytecodePosition(),
-                                                                      eirToTargetLocations(eirJavaFrameDescriptor.locals()),
-                                                                      eirToTargetLocations(eirJavaFrameDescriptor.stackSlots()));
+                                                                      eirToTargetLocations(eirJavaFrameDescriptor.locals),
+                                                                      eirToTargetLocations(eirJavaFrameDescriptor.stackSlots));
             eirToTargetJavaFrameDescriptor.put(eirJavaFrameDescriptor, targetJavaFrameDescriptor);
         }
         return targetJavaFrameDescriptor;
@@ -261,7 +261,7 @@ public abstract class EirTargetEmitter<Assembler_Type extends Assembler> {
     protected abstract boolean isCall(byte[] code, int offset);
 
     protected boolean isSafepoint(byte[] code, int offset) {
-        return Bytes.equals(code, offset, safepoint.code());
+        return Bytes.equals(code, offset, safepoint.code);
     }
 
     /**
