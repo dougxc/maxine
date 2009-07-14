@@ -50,7 +50,7 @@ public class LIRConstant extends LIROperand {
      */
     @Override
     public BasicType type() {
-        return value.basicType();
+        return value.basicType;
     }
 
     /**
