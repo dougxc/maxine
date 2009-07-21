@@ -64,7 +64,7 @@ public final class NoGCHeapScheme extends HeapSchemeAdaptor implements HeapSchem
          * @param address sets an inspected field that can be used for debugging.
          */
         void setAllocationMark(Address address) {
-            mark = address;
+            mark.set(address);
         }
     }
 
@@ -81,9 +81,6 @@ public final class NoGCHeapScheme extends HeapSchemeAdaptor implements HeapSchem
     }
 
     public void initializeAuxiliarySpace(Pointer primordialVmThreadLocals, Pointer auxiliarySpace) {
-    }
-
-    public void initializeVmThread(Pointer vmThreadLocals) {
     }
 
     private final Timer clearTimer = GlobalMetrics.newTimer("Clear", Clock.SYSTEM_MILLISECONDS);
@@ -177,7 +174,7 @@ public final class NoGCHeapScheme extends HeapSchemeAdaptor implements HeapSchem
 
     private NoGCHeapMemoryRegion space = new NoGCHeapMemoryRegion("Heap-NoGC");
     private Address top;
-    private AtomicWord allocationMark;
+    private final AtomicWord allocationMark = new AtomicWord();
 
     @INLINE
     private Address allocationMark() {
@@ -186,9 +183,7 @@ public final class NoGCHeapScheme extends HeapSchemeAdaptor implements HeapSchem
 
     @Override
     public void initialize(MaxineVM.Phase phase) {
-        if (MaxineVM.isPrototyping()) {
-            allocationMark = new AtomicWord();
-        } else if (phase == MaxineVM.Phase.PRISTINE) {
+        if (phase == MaxineVM.Phase.PRISTINE) {
             final Size size = Heap.initialSize();
 
             space.setSize(size);
