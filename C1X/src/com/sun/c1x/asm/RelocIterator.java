@@ -20,16 +20,30 @@
  */
 package com.sun.c1x.asm;
 
-import com.sun.c1x.target.x86.*;
 
 /**
+ * The <code>RelocIterator</code> class definition.
  *
+ * @author Marcelo Cintra
  * @author Thomas Wuerthinger
  *
  */
-public class ICache {
+public class RelocIterator {
 
-    public static void invalidateRange(Address addrAt, int offset) {
+    public RelocationHolder rh;
+
+    /**
+     * @param ri
+     */
+    public void setCurrent(RelocInfo ri) {
+        // TODO Auto-generated method stub
+
+    }
+
+    /**
+     *
+     */
+    public void reloc() {
         // TODO Auto-generated method stub
 
     }

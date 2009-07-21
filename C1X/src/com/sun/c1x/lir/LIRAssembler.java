@@ -144,6 +144,8 @@ public abstract class LIRAssembler {
         // bs =
         this.frameMap = compilation.frameMap();
         slowCaseStubs = new ArrayList<CodeStub>();
+
+        branchTargetBlocks = new ArrayList<BlockBegin>();
     }
 
     void appendPatchingStub(PatchingStub stub) {
@@ -174,7 +176,7 @@ public abstract class LIRAssembler {
         }
     }
 
-    void emitSlowCaseStubs() {
+    public void emitSlowCaseStubs() {
         emitStubs(slowCaseStubs);
     }
 
@@ -190,7 +192,7 @@ public abstract class LIRAssembler {
         return masm.pc();
     }
 
-    void emitExceptionEntries(List<ExceptionInfo> infoList) {
+    public void emitExceptionEntries(List<ExceptionInfo> infoList) {
         for (int i = 0; i < infoList.size(); i++) {
             List<ExceptionHandler> handlers = infoList.get(i).exceptionHandlers();
 
@@ -459,7 +461,9 @@ public abstract class LIRAssembler {
         }
 
         // emit the static call stub stuff out of line
-        emitStaticCallStub();
+        if (C1XOptions.EmitStaticCallStubs) {
+            emitStaticCallStub();
+        }
 
         switch (op.code()) {
             case StaticCall:
@@ -531,15 +535,15 @@ public abstract class LIRAssembler {
                 break;
 
             case Fxch:
-                fxch(op.inOpr().asJint());
+                fxch(op.inOpr().asInt());
                 break;
 
             case Fld:
-                fld(op.inOpr().asJint());
+                fld(op.inOpr().asInt());
                 break;
 
             case Ffree:
-                ffree(op.inOpr().asJint());
+                ffree(op.inOpr().asInt());
                 break;
 
             case Branch:
@@ -729,7 +733,7 @@ public abstract class LIRAssembler {
             case Shr:
             case Ushr:
                 if (op.inOpr2().isConstant()) {
-                    shiftOp(op.code(), op.inOpr1(), op.inOpr2().asConstantPtr().asJint(), op.resultOpr());
+                    shiftOp(op.code(), op.inOpr1(), op.inOpr2().asConstantPtr().asInt(), op.resultOpr());
                 } else {
                     shiftOp(op.code(), op.inOpr1(), op.inOpr2(), op.resultOpr(), op.tmpOpr());
                 }
@@ -923,4 +927,9 @@ public abstract class LIRAssembler {
     protected abstract void emitProfileCall(LIRProfileCall lirProfileCall);
 
     public abstract void emitExceptionHandler();
+
+    public void emitDeoptHandler() {
+        // TODO Auto-generated method stub
+
+    }
 }
