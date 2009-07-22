@@ -30,7 +30,6 @@ import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.stub.*;
-import com.sun.c1x.target.x86.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 
@@ -171,7 +170,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
 
     @Override
     public void visitBase(Base x) {
-        lir.stdEntry(LIROperandFactory.illegalOperand);
+        lir.stdEntry(LIROperandFactory.IllegalOperand);
         // Emit moves from physical registers / stack slots to virtual registers
         CallingConvention args = compilation.frameMap().incomingArguments();
         int javaIndex = 0;
@@ -212,7 +211,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             LIROperand meth = newRegister(BasicType.Object);
             lir.oop2reg(method, meth);
             arguments.add(meth);
-            callRuntime(signature, arguments, compilation.runtime.getRuntimeEntry(CiRuntimeCall.DTraceMethodEntry), ValueType.VOID_TYPE, null);
+            callRuntime(signature, arguments, CiRuntimeCall.DTraceMethodEntry, ValueType.VOID_TYPE, null);
         }
 
         if (method.isSynchronized()) {
@@ -311,7 +310,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             BasicType[] signature = new BasicType[] {BasicType.Int};
             CallingConvention cc = frameMap().runtimeCallingConvention(signature);
             lir.move(osrBuffer, cc.args().get(0));
-            lir.callRuntimeLeaf(compilation.runtime.getRuntimeEntry(CiRuntimeCall.OSRMigrationEnd), getThreadTemp(), LIROperandFactory.illegalOperand, cc.args());
+            lir.callRuntimeLeaf(CiRuntimeCall.OSRMigrationEnd, getThreadTemp(), LIROperandFactory.IllegalOperand, cc.args());
         }
 
         if (x.isSafepoint()) {
@@ -380,7 +379,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             case java_lang_System$currentTimeMillis: {
                 assert x.numberOfArguments() == 0 : "wrong type";
                 LIROperand reg = resultRegisterFor(x.type());
-                lir.callRuntimeLeaf(compilation.runtime.getRuntimeEntry(CiRuntimeCall.JavaTimeMillis), getThreadTemp(), reg, new ArrayList<LIROperand>(0));
+                lir.callRuntimeLeaf(CiRuntimeCall.JavaTimeMillis, getThreadTemp(), reg, new ArrayList<LIROperand>(0));
                 LIROperand result = rlockResult(x);
                 lir.move(reg, result);
                 break;
@@ -389,7 +388,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             case java_lang_System$nanoTime: {
                 assert x.numberOfArguments() == 0 : "wrong type";
                 LIROperand reg = resultRegisterFor(x.type());
-                lir.callRuntimeLeaf(compilation.runtime.getRuntimeEntry(CiRuntimeCall.JavaTimeNanos), getThreadTemp(), reg, new ArrayList<LIROperand>(0));
+                lir.callRuntimeLeaf(CiRuntimeCall.JavaTimeNanos, getThreadTemp(), reg, new ArrayList<LIROperand>(0));
                 LIROperand result = rlockResult(x);
                 lir.move(reg, result);
                 break;
@@ -450,10 +449,10 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
 
         List<LIROperand> argList = cc.args();
         List<LIRItem> args = visitInvokeArguments(x);
-        LIROperand receiver = LIROperandFactory.illegalOperand;
+        LIROperand receiver = LIROperandFactory.IllegalOperand;
 
         // setup result register
-        LIROperand resultRegister = LIROperandFactory.illegalOperand;
+        LIROperand resultRegister = LIROperandFactory.IllegalOperand;
         if (!x.type().isVoid()) {
             resultRegister = resultRegisterFor(x.type());
         }
@@ -473,7 +472,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
 
         switch (x.opcode()) {
             case Bytecodes.INVOKESTATIC:
-                lir.callStatic(x.target(), resultRegister, getResolveStaticCallStub(), argList, info);
+                lir.callStatic(x.target(), resultRegister, CiRuntimeCall.ResolveStaticCall, argList, info);
                 break;
             case Bytecodes.INVOKESPECIAL:
             case Bytecodes.INVOKEVIRTUAL:
@@ -481,9 +480,9 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
                 // for final target we still produce an inline cache, in order
                 // to be able to call mixed mode
                 if (x.opcode() == Bytecodes.INVOKESPECIAL || optimized) {
-                    lir.callOptVirtual(x.target(), receiver, resultRegister, getResolveOptVirtualCallStub(), argList, info);
+                    lir.callOptVirtual(x.target(), receiver, resultRegister, CiRuntimeCall.ResolveOptVirtualCall, argList, info);
                 } else if (x.vtableIndex() < 0) {
-                    lir.callIcvirtual(x.target(), receiver, resultRegister, getResolveVirtualCallStub(), argList, info);
+                    lir.callIcvirtual(x.target(), receiver, resultRegister, CiRuntimeCall.ResolveVirtualCall, argList, info);
                 } else {
                     int entryOffset = compilation.runtime.vtableStartOffset() + x.vtableIndex() * compilation.runtime.vtableEntrySize();
                     int vtableOffset = entryOffset * compilation.target.arch.wordSize + compilation.runtime.vtableEntryMethodOffsetInBytes();
@@ -553,7 +552,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             // instruction to patch.
             address = new LIRAddress(object.result(), Integer.MAX_VALUE, fieldType);
         } else {
-            address = generateAddress(object.result(), LIROperandFactory.illegalOperand, 0, x.offset(), fieldType);
+            address = generateAddress(object.result(), LIROperandFactory.IllegalOperand, 0, x.offset(), fieldType);
         }
 
         if (isVolatile) {
@@ -683,7 +682,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
     @Override
     public void visitProfileCall(ProfileCall x) {
         // Need recv in a temporary register so it interferes with the other temporaries
-        LIROperand recv = LIROperandFactory.illegalOperand;
+        LIROperand recv = LIROperandFactory.IllegalOperand;
         LIROperand mdo = newRegister(BasicType.Object);
         LIROperand tmp = newRegister(BasicType.Int);
         if (x.object() != null) {
@@ -706,7 +705,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
     public void visitReturn(Return x) {
 
         if (x.type().isVoid()) {
-            lir.returnOp(LIROperandFactory.illegalOperand);
+            lir.returnOp(LIROperandFactory.IllegalOperand);
         } else {
             LIROperand reg = resultRegisterFor(x.type(), /* callee= */true);
             LIRItem result = new LIRItem(x.result(), this);
@@ -729,7 +728,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         } else {
             LIROperand result = newRegister(BasicType.Double);
             setVregFlag(result, VregFlag.MustStartInMemory);
-            lir.roundfp(inputOpr, LIROperandFactory.illegalOperand, result);
+            lir.roundfp(inputOpr, LIROperandFactory.IllegalOperand, result);
             setResult(x, result);
         }
     }
@@ -792,7 +791,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             // instruction to patch.
             address = new LIRAddress(object.result(), Integer.MAX_VALUE, fieldType);
         } else {
-            address = generateAddress(object.result(), LIROperandFactory.illegalOperand, 0, x.offset(), fieldType);
+            address = generateAddress(object.result(), LIROperandFactory.IllegalOperand, 0, x.offset(), fieldType);
         }
 
         if (isVolatile && compilation.runtime.isMP()) {
@@ -899,7 +898,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         lir.move(exceptionOpr, exceptionOopOpr());
 
         if (unwind) {
-            lir.unwindException(LIROperandFactory.illegalOperand, exceptionOopOpr(), info);
+            lir.unwindException(LIROperandFactory.IllegalOperand, exceptionOopOpr(), info);
         } else {
             lir.throwException(exceptionPcOpr(), exceptionOopOpr(), info);
         }
@@ -1110,10 +1109,10 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         }
     }
 
-    private LIROperand callRuntimeWithItems(BasicType[] signature, List<LIRItem> args, long entry, ValueType resultType, CodeEmitInfo info) {
+    private LIROperand callRuntimeWithItems(BasicType[] signature, List<LIRItem> args, CiRuntimeCall entry, ValueType resultType, CodeEmitInfo info) {
         // get a result register
-        LIROperand physReg = LIROperandFactory.illegalOperand;
-        LIROperand result = LIROperandFactory.illegalOperand;
+        LIROperand physReg = LIROperandFactory.IllegalOperand;
+        LIROperand result = LIROperandFactory.IllegalOperand;
         if (!resultType.isVoid()) {
             result = newRegister(resultType.basicType);
             physReg = resultRegisterFor(resultType);
@@ -1170,18 +1169,6 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
 
     protected FrameMap frameMap() {
         throw Util.unimplemented();
-    }
-
-    private long getResolveOptVirtualCallStub() {
-        return compilation.runtime.getRuntimeEntry(CiRuntimeCall.ResolveOptVirtualCall);
-    }
-
-    private long getResolveStaticCallStub() {
-        return compilation.runtime.getRuntimeEntry(CiRuntimeCall.ResolveStaticCall);
-    }
-
-    private long getResolveVirtualCallStub() {
-        return compilation.runtime.getRuntimeEntry(CiRuntimeCall.ResolveVirtualCall);
     }
 
     private LIROperand loadConstant(Constant x) {
@@ -1293,7 +1280,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
             setVregFlag(result, VregFlag.MustStartInMemory);
             assert opr.isRegister() : "only a register can be spilled";
             assert opr.basicType == BasicType.Float : "rounding only for floats available";
-            lir.roundfp(opr, LIROperandFactory.illegalOperand, result);
+            lir.roundfp(opr, LIROperandFactory.IllegalOperand, result);
             return result;
         }
         return opr;
@@ -1367,7 +1354,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         List<LIROperand> args = new ArrayList<LIROperand>();
         args.add(receiver.result());
         CodeEmitInfo info = stateFor(x, x.state());
-        callRuntime(signature, args, compilation.runtime.getRuntimeEntry(CiRuntimeCall.RegisterFinalizer), ValueType.VOID_TYPE, info);
+        callRuntime(signature, args, CiRuntimeCall.RegisterFinalizer, ValueType.VOID_TYPE, info);
 
         setNoResult(x);
     }
@@ -1509,7 +1496,7 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
     }
 
     protected void arithmeticOpLong(int code, LIROperand result, LIROperand left, LIROperand right, CodeEmitInfo info) {
-        arithmeticOp(code, result, left, right, false, LIROperandFactory.illegalOperand, info);
+        arithmeticOp(code, result, left, right, false, LIROperandFactory.IllegalOperand, info);
     }
 
     protected final void arraycopyHelper(Intrinsic x, int[] flagsp, CiType[] expectedTypep) {
@@ -1631,10 +1618,10 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         }
     }
 
-    LIROperand callRuntime(BasicType[] signature, List<LIROperand> args, long l, ValueType resultType, CodeEmitInfo info) {
+    LIROperand callRuntime(BasicType[] signature, List<LIROperand> args, CiRuntimeCall l, ValueType resultType, CodeEmitInfo info) {
         // get a result register
-        LIROperand physReg = LIROperandFactory.illegalOperand;
-        LIROperand result = LIROperandFactory.illegalOperand;
+        LIROperand physReg = LIROperandFactory.IllegalOperand;
+        LIROperand result = LIROperandFactory.IllegalOperand;
         if (!resultType.isVoid()) {
             result = newRegister(resultType.basicType);
             physReg = resultRegisterFor(resultType);
@@ -1669,14 +1656,14 @@ public abstract class LIRGenerator extends InstructionVisitor implements BlockCl
         return result;
     }
 
-    LIROperand callRuntime(Instruction arg1, long entry, ValueType resultType, CodeEmitInfo info) {
+    LIROperand callRuntime(Instruction arg1, CiRuntimeCall entry, ValueType resultType, CodeEmitInfo info) {
         List<LIRItem> args = new ArrayList<LIRItem>(1);
         args.add(new LIRItem(arg1, this));
         BasicType[] signature = new BasicType[] {arg1.type().basicType};
         return callRuntimeWithItems(signature, args, entry, resultType, info);
     }
 
-    LIROperand callRuntime(Instruction arg1, Instruction arg2, long entry, ValueType resultType, CodeEmitInfo info) {
+    LIROperand callRuntime(Instruction arg1, Instruction arg2, CiRuntimeCall entry, ValueType resultType, CodeEmitInfo info) {
 
         List<LIRItem> args = new ArrayList<LIRItem>();
         args.add(new LIRItem(arg1, this));
@@ -2103,7 +2090,7 @@ void incrementInvocationCounter(CodeEmitInfo info, boolean backedge) {
         try {
             // stop walk when encounter a root
             if (instr.isPinned() && (!(instr instanceof Phi)) || instr.operand().isValid()) {
-                assert instr.operand() != LIROperandFactory.illegalOperand || instr instanceof Constant : "this root has not yet been visited";
+                assert instr.operand() != LIROperandFactory.IllegalOperand || instr instanceof Constant : "this root has not yet been visited";
             } else {
                 assert instr.subst() == instr : "shouldn't have missed substitution";
                 instr.accept(this);
@@ -2153,7 +2140,7 @@ void incrementInvocationCounter(CodeEmitInfo info, boolean backedge) {
 
     protected abstract LIROperand getThreadTemp();
 
-    protected abstract void incrementCounter(Address counter, int step);
+    protected abstract void incrementCounter(long address, int step);
 
     protected abstract void incrementCounter(LIRAddress counter, int step);
 
