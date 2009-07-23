@@ -307,15 +307,15 @@ public abstract class AbstractAssembler {
 
     public void installTargetMethod() {
         if (compilation.targetMethod == null) {
-            byte[] array = codeBuffer.finished();
-            int length = codeBuffer.position();
+            //byte[] array = codeBuffer.finished();
+            //int length = codeBuffer.position();
             //Util.printBytes(array, length);
 
             //TTY.println("Disassembled code:");
             //TTY.println(compilation.runtime.disassemble(Arrays.copyOf(array, length)));
 
-            array = dataBuffer.finished();
-            length = dataBuffer.position();
+            //array = dataBuffer.finished();
+            //length = dataBuffer.position();
             //Util.printBytes(array, length);
             //TTY.println("Frame size: %d", compilation.frameMap().framesize());
 
