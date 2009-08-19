@@ -18,26 +18,34 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package com.sun.max.vm.compiler.c1x;
+package com.sun.c1x.stub;
 
-import com.sun.max.vm.*;
-import com.sun.max.vm.compiler.*;
-import com.sun.max.vm.jit.amd64.*;
+import com.sun.c1x.lir.*;
+
 
 /**
- * The package class that describes the C1X packages to the Maxine configurator.
- * @see com.sun.max.MaxPackage
  *
- * @author Ben L. Titzer
+ * @author Thomas Wuerthinger
+ *
  */
-public class Package extends VMPackage {
-    public Package() {
-        super();
-        registerScheme(DynamicCompilerScheme.class, C1XCompilerScheme.class);
+public class JITAdapterFrameStub extends CodeStub {
+
+    /**
+     * Creates a new instance of <code>ImplicitNullCheckStub</code>.
+     *
+     * @param offset the offset for this code stub
+     * @param info the debug information associated to this code stub
+     */
+    public JITAdapterFrameStub() {
+        super(null);
     }
 
     @Override
-    public boolean isPartOfMaxineVM(VMConfiguration vmConfiguration) {
-        return new com.sun.max.vm.compiler.b.c.d.e.amd64.target.Package().isPartOfMaxineVM(vmConfiguration);
+    public void visit(LIRVisitState visitor) {
+    }
+
+    @Override
+    public void accept(CodeStubVisitor visitor) {
+        visitor.visitJITAdapterFrameStub(this);
     }
 }
