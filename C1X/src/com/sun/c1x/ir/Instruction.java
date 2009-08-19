@@ -439,30 +439,20 @@ public abstract class Instruction {
     }
 
     /**
-     * Apply the specified closure to all the state values of this instruction.
-     * @param closure the closure to apply
-     */
-    public void stateValuesDo(InstructionClosure closure) {
-        // default: do nothing.
-    }
-
-    /**
-     * Apply the specified closure to all the other values of this instruction.
-     * @param closure the closure to apply
-     */
-    public void otherValuesDo(InstructionClosure closure) {
-        // default: do nothing.
-    }
-
-    /**
      * Apply the specified closure to all the values of this instruction, including
      * input values, state values, and other values.
      * @param closure the closure to apply
      */
     public void allValuesDo(InstructionClosure closure) {
         inputValuesDo(closure);
-        stateValuesDo(closure);
-        otherValuesDo(closure);
+        ValueStack stateBefore = stateBefore();
+        if (stateBefore != null) {
+            stateBefore.valuesDo(closure);
+        }
+        ValueStack stateAfter = stateAfter();
+        if (stateAfter != null) {
+            stateAfter.valuesDo(closure);
+        }
     }
 
     @Override
@@ -516,7 +506,15 @@ public abstract class Instruction {
      * Gets the lock stack of the instruction if one exists.
      * @return the lock stack
      */
-    public ValueStack lockStack() {
+    public ValueStack stateBefore() {
+        return null;
+    }
+
+    /**
+     * Gets the lock stack of the instruction if one exists.
+     * @return the lock stack
+     */
+    public ValueStack stateAfter() {
         return null;
     }
 

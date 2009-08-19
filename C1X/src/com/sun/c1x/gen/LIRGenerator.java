@@ -210,7 +210,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
             lir.move(src, dest);
 
             // Assign new location to Local instruction for this local
-            Local local = ((Local) x.state().localAt(javaIndex));
+            Local local = ((Local) x.stateAfter().localAt(javaIndex));
             assert local != null : "Locals for incoming arguments must have been created";
             assert t == local.type().basicType : "check";
             local.setOperand(dest);
@@ -226,7 +226,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
                 obj = newRegister(BasicType.Object);
                 lir.oop2reg(method.holder().javaClass(), obj);
             } else {
-                Local receiver = (Local) x.state().localAt(0);
+                Local receiver = (Local) x.stateAfter().localAt(0);
                 obj = receiver.operand();
             }
             assert !obj.isIllegal() : "must be valid";
@@ -254,9 +254,15 @@ public abstract class LIRGenerator extends InstructionVisitor {
 
     @Override
     public void visitResolveClass(ResolveClass i) {
+<<<<<<< local
+        assert i.stateBefore() != null;
+
+
+=======
         assert i.state() != null;
         LIROperand result = rlockResult(i);
         lir.resolveInstruction(result, LIROperandFactory.intConst(i.cpi), LIROperandFactory.oopConst(i.constantPool.encoding()), stateFor(i));
+>>>>>>> other
     }
 
     @Override
@@ -321,7 +327,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
             BasicType[] signature = new BasicType[] {BasicType.Int};
             this.callRuntime(signature, Arrays.asList(osrBuffer), CiRuntimeCall.OSRMigrationEnd, BasicType.Void, null);
 
-            ValueStack state = (x.stateBefore() != null) ? x.stateBefore() : x.state();
+            ValueStack state = (x.stateAfter() != null) ? x.stateAfter() : x.stateAfter();
 
             // increment backedge counter if needed
             incrementBackedgeCounter(stateFor(x, state));
@@ -332,7 +338,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
 
         // emit phi-instruction move after safepoint since this simplifies
         // describing the state as the safepoint.
-        moveToPhi(x.state());
+        moveToPhi(x.stateAfter());
 
         lir.jump(x.defaultSuccessor());
     }
@@ -462,7 +468,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
             resultRegister = resultRegisterFor(x.type().basicType);
         }
 
-        CodeEmitInfo info = stateFor(x, x.state());
+        CodeEmitInfo info = stateFor(x, x.stateBefore());
 
         assert args.size() == argList.size();
         loadInvokeArguments(x, args, argList);
@@ -520,7 +526,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
         } else if (x.needsNullCheck()) {
             NullCheck nc = x.explicitNullCheck();
             if (nc == null) {
-                info = stateFor(x, x.lockStack());
+                info = stateFor(x, x.stateBefore());
             } else {
                 info = stateFor(nc);
             }
@@ -628,11 +634,11 @@ public abstract class LIRGenerator extends InstructionVisitor {
         setNoResult(x);
 
         if (x.isSafepoint()) {
-            lir.safepoint(safepointPollRegister(), stateFor(x, x.stateBefore()));
+            lir.safepoint(safepointPollRegister(), stateFor(x, x.stateAfter()));
         }
 
         // move values into phi locations
-        moveToPhi(x.state());
+        moveToPhi(x.stateAfter());
 
         LIROperand value = tag.result();
         if (C1XOptions.UseTableRanges) {
@@ -728,7 +734,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
         } else if (x.needsNullCheck()) {
             NullCheck nc = x.explicitNullCheck();
             if (nc == null) {
-                info = stateFor(x, x.lockStack());
+                info = stateFor(x, x.stateBefore());
             } else {
                 info = stateFor(nc);
             }
@@ -808,11 +814,11 @@ public abstract class LIRGenerator extends InstructionVisitor {
         setNoResult(x);
 
         if (x.isSafepoint()) {
-            lir.safepoint(safepointPollRegister(), stateFor(x, x.stateBefore()));
+            lir.safepoint(safepointPollRegister(), stateFor(x, x.stateAfter()));
         }
 
         // move values into phi locations
-        moveToPhi(x.state());
+        moveToPhi(x.stateAfter());
 
         int loKey = x.lowKey();
         int len = x.numberOfCases();
@@ -834,7 +840,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
         exception.loadItem();
         setNoResult(x);
         LIROperand exceptionOpr = exception.result();
-        CodeEmitInfo info = stateFor(x, x.state());
+        CodeEmitInfo info = stateFor(x, x.stateAfter());
 
         if (C1XOptions.PrintMetrics) {
             incrementCounter(compilation.runtime.throwCountAddress(), 1);
@@ -1239,7 +1245,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
         // need to perform the null check on the rcvr
         CodeEmitInfo info = null;
         if (x.needsNullCheck()) {
-            info = stateFor(x, x.state().copyLocks());
+            info = stateFor(x, x.stateBefore().copyLocks());
         }
         lir.move(new LIRAddress(rcvr.result(), compilation.runtime.klassOffsetInBytes(), BasicType.Object), result, info);
         lir.move(new LIRAddress(result, compilation.runtime.klassJavaMirrorOffsetInBytes() + LIRGenerator.klassPartOffsetInBytes(), BasicType.Object), result);
@@ -1280,7 +1286,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
         receiver.loadItem();
         List<LIROperand> args = new ArrayList<LIROperand>();
         args.add(receiver.result());
-        CodeEmitInfo info = stateFor(x, x.state());
+        CodeEmitInfo info = stateFor(x, x.stateBefore());
         callRuntime(BASIC_TYPES_OBJECT, args, CiRuntimeCall.RegisterFinalizer, BasicType.Void, info);
 
         setNoResult(x);
@@ -1799,7 +1805,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
     void init() {
 
         for (BlockBegin begin : ir.linearScanOrder()) {
-            begin.end().state().pinStackForLinearScan();
+            begin.end().stateAfter().pinStackForLinearScan();
         }
 
         UseCountComputer useCountComputer = new UseCountComputer(useCounts);
@@ -2026,7 +2032,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
     }
 
     protected CodeEmitInfo stateFor(Instruction x) {
-        return stateFor(x, x.lockStack());
+        return stateFor(x, x.stateBefore());
     }
 
     protected CodeEmitInfo stateFor(Instruction x, ValueStack state) {

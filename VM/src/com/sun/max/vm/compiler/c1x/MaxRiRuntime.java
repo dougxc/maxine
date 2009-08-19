@@ -283,10 +283,6 @@ public class MaxRiRuntime implements RiRuntime {
         throw Util.unimplemented();
     }
 
-    public int arrayElementSize(BasicType type) {
-        throw Util.unimplemented(); // TODO: move usages to BasicType.elementSize
-    }
-
     public int arrayOopDescHeaderSize(BasicType type) {
         throw Util.unimplemented();
     }
@@ -616,7 +612,6 @@ public class MaxRiRuntime implements RiRuntime {
         return globalConstantPool.canonicalRiType(ClassActor.fromJava(elemType.primitiveArrayClass()));
     }
 
-    @Override
     public Register threadRegister() {
         return X86.r14;
     }
