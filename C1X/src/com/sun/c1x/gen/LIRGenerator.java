@@ -216,7 +216,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
     public void visitResolveClass(ResolveClass i) {
         assert i.stateBefore() != null;
         LIROperand result = rlockResult(i);
-        lir.resolveInstruction(result, LIROperandFactory.intConst(i.cpi), LIROperandFactory.oopConst(i.constantPool.encoding()), stateFor(i));
+        lir.resolveInstruction(result, LIROperandFactory.intConst(i.cpi), LIROperandFactory.oopConst(i.constantPool.encoding().asObject()), stateFor(i));
     }
 
     @Override
@@ -421,6 +421,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
 
         switch (x.opcode()) {
             case Bytecodes.INVOKESTATIC:
+
                 lir.callStatic(x.target(), resultRegister, GlobalStub.ResolveStaticCall, argList, info, x.cpi, x.constantPool);
                 break;
             case Bytecodes.INVOKESPECIAL:
@@ -1112,7 +1113,7 @@ public abstract class LIRGenerator extends InstructionVisitor {
 
                 int notTakenCountOffset = md.branchNotTakenCountOffset(ifInstr.profiledBCI());
                 LIROperand mdReg = newRegister(BasicType.Object);
-                lir.move(LIROperandFactory.oopConst(md), mdReg);
+                lir.move(LIROperandFactory.oopConst(md.encoding().asObject()), mdReg);
                 LIROperand dataOffsetReg = newRegister(BasicType.Int);
                 lir.cmove(lirCond(cond), LIROperandFactory.intConst(takenCountOffset), LIROperandFactory.intConst(notTakenCountOffset), dataOffsetReg);
                 LIROperand dataReg = newRegister(BasicType.Int);
