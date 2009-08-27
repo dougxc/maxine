@@ -18,30 +18,28 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package com.sun.max.vm.code;
+/**
+ * @author Hannes Payer
+ */
+package com.sun.max.memory;
 
-import com.sun.max.memory.*;
-import com.sun.max.platform.*;
-import com.sun.max.program.*;
 import com.sun.max.unsafe.*;
+import com.sun.max.vm.runtime.*;
 
 /**
- * A code manager that reserves and allocates virtual memory at a fixed address.
+ * Immortal memory region can be used for objects, which are not collected by the GC.
  *
- * @author Bernd Mathiske
+ * @author Hannes Payer
  */
-public class FixedAddressCodeManager extends CodeManager {
+public class ImmortalMemoryRegion extends RuntimeMemoryRegion{
 
-    /**
-     * Initialize this code manager.
-     */
-    @Override
-    void initialize() {
-        final Address address = Code.bootCodeRegion.end().roundedUpBy(Platform.hostOrTarget().pageSize);
-        final Size size = runtimeCodeRegionSize.getValue();
-        if (!VirtualMemory.allocateAtFixedAddress(address, size, VirtualMemory.Type.CODE)) {
-            ProgramError.unexpected("could not allocate runtime code region");
+    public void initialize(Size size) {
+        Pointer region = Memory.allocate(size, true);
+        if (region.equals(Pointer.zero())) {
+            FatalError.unexpected("Initialization of immortal memory region failed");
         }
-        runtimeCodeRegion.bind(address, size);
+        this.size = size;
+        this.start = region;
+        this.mark.set(region);
     }
 }
