@@ -35,7 +35,7 @@ import com.sun.c1x.value.*;
  */
 public class BlockMerger implements BlockClosure {
 
-    private final BlockBegin startBlock;
+    final BlockBegin startBlock;
 
     public BlockMerger(IR ir) {
         startBlock = ir.startBlock;
@@ -87,15 +87,15 @@ public class BlockMerger implements BlockClosure {
                     C1XMetrics.BlocksMerged++;
                 } else if (C1XOptions.DoBlockSkipping && block.next() == oldEnd) {
                     // the successor has multiple predecessors, but this block is empty
-                    final ValueStack oldEndState = oldEnd.stateAfter();
-                    assert sux.stateBefore().scope() == oldEndState.scope();
+                    ValueStack oldState = oldEnd.stateAfter();
+                    assert sux.stateBefore().scope() == oldState.scope();
                     if (block.stateBefore().hasPhisFor(block)) {
                         // can't skip a block that has phis
                         return false;
                     }
                     for (BlockBegin pred : block.predecessors()) {
-                        final ValueStack predState = pred.end().stateAfter();
-                        if ((predState.scope() != oldEndState.scope()) || (predState.stackSize() != oldEndState.stackSize())) {
+                        ValueStack predState = pred.end().stateAfter();
+                        if (predState.scope() != oldState.scope() || predState.stackSize() != oldState.stackSize()) {
                             // scopes would not match after skipping this block
                             // XXX: if phi's were smarter about scopes, this would not be necessary
                             return false;
