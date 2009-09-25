@@ -26,11 +26,11 @@ import com.sun.max.vm.monitor.modal.modehandlers.lightweight.biased.*;
 /**
  * @author Bernd Mathiske
  */
-public final class BoxedBiasedLockWord64 extends BiasedLockWord64 implements UnsafeBox {
+public final class BoxedBiasedLockword64 extends BiasedLockword64 implements UnsafeBox {
 
     protected long nativeWord;
 
-    public BoxedBiasedLockWord64(Word word) {
+    public BoxedBiasedLockword64(Word word) {
         final UnsafeBox unsafeBox = (UnsafeBox) word;
         nativeWord = unsafeBox.nativeWord();
     }

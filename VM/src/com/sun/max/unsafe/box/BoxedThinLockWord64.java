@@ -26,11 +26,11 @@ import com.sun.max.vm.monitor.modal.modehandlers.lightweight.thin.*;
 /**
  * @author Bernd Mathiske
  */
-public final class BoxedThinLockWord64 extends ThinLockWord64 implements UnsafeBox {
+public final class BoxedThinLockword64 extends ThinLockword64 implements UnsafeBox {
 
     protected long nativeWord;
 
-    public BoxedThinLockWord64(Word word) {
+    public BoxedThinLockword64(Word word) {
         final UnsafeBox unsafeBox = (UnsafeBox) word;
         nativeWord = unsafeBox.nativeWord();
     }

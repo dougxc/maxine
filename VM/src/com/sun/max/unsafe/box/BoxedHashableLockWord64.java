@@ -26,11 +26,11 @@ import com.sun.max.vm.monitor.modal.modehandlers.*;
 /**
  * @author Bernd Mathiske
  */
-public final class BoxedHashableLockWord64 extends HashableLockWord64 implements UnsafeBox {
+public final class BoxedHashableLockword64 extends HashableLockword64 implements UnsafeBox {
 
     protected long nativeWord;
 
-    public BoxedHashableLockWord64(Word word) {
+    public BoxedHashableLockword64(Word word) {
         final UnsafeBox unsafeBox = (UnsafeBox) word;
         nativeWord = unsafeBox.nativeWord();
     }

@@ -26,11 +26,11 @@ import com.sun.max.vm.monitor.modal.modehandlers.lightweight.*;
 /**
  * @author Bernd Mathiske
  */
-public final class BoxedLightweightLockWord64 extends LightweightLockWord64 implements UnsafeBox {
+public final class BoxedLightweightLockword64 extends LightweightLockword64 implements UnsafeBox {
 
     protected long nativeWord;
 
-    public BoxedLightweightLockWord64(Word word) {
+    public BoxedLightweightLockword64(Word word) {
         final UnsafeBox unsafeBox = (UnsafeBox) word;
         nativeWord = unsafeBox.nativeWord();
     }
