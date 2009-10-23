@@ -25,13 +25,19 @@ import java.util.*;
 import com.sun.c1x.ci.*;
 import com.sun.c1x.xir.*;
 
-
+/**
+ * X86 specific preprocessing of XIR.
+ *
+ * @author Thomas Wuerthinger
+ *
+ */
 public class X86XirAssembler extends CiXirAssembler {
+
 
     @Override
     protected XirTemplate buildTemplate(String name, boolean isStub) {
-        ArrayList<XirInstruction> fastPath = new ArrayList<XirInstruction>(instructions.size());
-        ArrayList<XirInstruction> slowPath = new ArrayList<XirInstruction>();
+        List<XirInstruction> fastPath = new ArrayList<XirInstruction>(instructions.size());
+        List<XirInstruction> slowPath = new ArrayList<XirInstruction>();
 
         int flags = 0;
 
@@ -39,7 +45,7 @@ public class X86XirAssembler extends CiXirAssembler {
             flags |= XirTemplate.GlobalFlags.GLOBAL_STUB.mask;
         }
 
-        ArrayList<XirInstruction> currentList = fastPath;
+        List<XirInstruction> currentList = fastPath;
 
         XirVariable divModTemp = null;
         XirVariable divModLeftInput = null;
@@ -47,8 +53,14 @@ public class X86XirAssembler extends CiXirAssembler {
         for (XirInstruction i : instructions) {
             boolean appended = false;
             switch (i.op) {
+
+                case Nop:
+                    appended = true;
+                    break;
+
                 case Mov:
                     break;
+
                 case Add:
                 case Sub:
                 case Div:
@@ -101,6 +113,7 @@ public class X86XirAssembler extends CiXirAssembler {
                     }
 
                     break;
+
                 case PointerLoad:
                 case PointerStore:
                 case PointerLoadDisp:

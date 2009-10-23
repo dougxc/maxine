@@ -189,8 +189,8 @@ public abstract class LIRGenerator extends ValueVisitor {
             LIROperand src = args.at(i);
             assert !src.isIllegal() : "check";
 
-            LIROperand dest = newRegister(src.kind);
-            lir.move(src, dest);
+            LIROperand dest = rlock(src.kind.stackType());
+            lir.move(src, dest, src.kind);
 
             // Assign new location to Local instruction for this local
             Value instr = state.localAt(javaIndex);
@@ -578,7 +578,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
 
-        CallingConvention cc = compilation.frameMap().javaCallingConvention(x.signature(), true);
+        CallingConvention cc = compilation.frameMap().javaCallingConvention(x.signature(), true, true);
 
         List<LIROperand> argList = cc.arguments();
         List<LIRItem> args = visitInvokeArguments(x);
@@ -685,7 +685,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (useXir(needsPatching)) {
             // XIR support for GETSTATIC and GETFIELD
             XirArgument receiver = toXirArgument(x.object());
-            XirSnippet snippet = x.isStatic() ? xir.genGetStatic(field) : xir.genGetField(receiver, field);
+            XirSnippet snippet = /*x.isStatic() ? xir.genGetStatic(field) :*/ xir.genGetField(receiver, field);
             if (snippet != null) {
                 emitXir(snippet, x, info, null);
                 return;
@@ -779,7 +779,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
 
-        lir.move(arrayAddr, rlockResult(x, x.elementKind()), null);
+        lir.move(arrayAddr, rlockResult(x, x.elementKind()), (LIRDebugInfo)null);
     }
 
     @Override
@@ -1020,7 +1020,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             // XIR support for PUTSTATIC and PUTFIELD
             XirArgument receiver = toXirArgument(x.object());
             XirArgument value = toXirArgument(x.value());
-            XirSnippet snippet = x.isStatic() ? xir.genPutStatic(value, field) : xir.genPutField(receiver, field, value);
+            XirSnippet snippet = /*x.isStatic() ? xir.genPutStatic(value, field) :*/ xir.genPutField(receiver, field, value);
             if (snippet != null) {
                 emitXir(snippet, x, info, null);
                 return;
@@ -1401,10 +1401,11 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private LIROperand loadConstant(Constant x) {
-        return loadConstant((LIRConstant) LIROperandFactory.constant(x));
+        return loadConstant((LIRConstant) LIROperandFactory.constant(x), x.kind);
     }
 
-    protected LIROperand loadConstant(LIRConstant c) {
+    protected LIROperand loadConstant(LIRConstant c, CiKind kind) {
+
         CiKind t = c.kind;
         for (int i = 0; i < constants.size(); i++) {
             // XXX: linear search might be kind of slow for big basic blocks
@@ -1436,7 +1437,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
 
-        LIROperand result = newRegister(t);
+        LIROperand result = newRegister(kind);
         lir.move(c, result);
         constants.add(c);
         regForConstants.add(result);
@@ -1481,7 +1482,8 @@ public abstract class LIRGenerator extends ValueVisitor {
         LIRLocation reg;
         switch (type) {
 
-            // TODO (tw): Check why we need char here too?
+            // TODO (tw): Check why we need char and short here too?
+            case Short:
             case Char:
             case Byte:
             case Boolean:
@@ -2074,9 +2076,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     public LIRLocation newRegister(CiKind type) {
         int vreg = virtualRegisterNumber++;
-        if (type == CiKind.Jsr) {
-            type = CiKind.Int;
-        }
         return LIROperandFactory.virtualRegister(vreg, type);
     }
 
@@ -2250,6 +2249,11 @@ public abstract class LIRGenerator extends ValueVisitor {
                 operandForPhi((Phi) instr);
             }
         }
+
+        if (instr instanceof Constant) {
+            operandForInstruction(instr);
+        }
+
         // the value must be a constant or have a valid operand
         assert instr instanceof Constant || !instr.operand().isIllegal() : "this root has not been visited yet";
     }
