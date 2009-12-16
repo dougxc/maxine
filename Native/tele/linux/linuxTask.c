@@ -745,13 +745,16 @@ Java_com_sun_max_tele_debug_linux_LinuxTask_nativeResume(JNIEnv *env, jclass c, 
     return result == 0;
 }
 
-JNIEXPORT jboolean JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sun_max_tele_debug_linux_LinuxTask_nativeWait(JNIEnv *env, jclass c, jint tgid, jint tid, jboolean allTasks) {
     if (allTasks) {
-        return process_wait_all_threads_stopped(tgid) > 0;
+        if (process_wait_all_threads_stopped(tgid) > 0) {
+            return PS_STOPPED;
+        }
+        return PS_TERMINATED;
     }
     c_UNIMPLEMENTED();
-    return false;
+    return PS_UNKNOWN;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -899,12 +902,14 @@ size_t task_write(pid_t tgid, pid_t tid, void *dst, const void *src, size_t size
 
 JNIEXPORT jint JNICALL
 Java_com_sun_max_tele_debug_linux_LinuxTask_nativeWriteBytes(JNIEnv *env, jclass c, jint tgid, jint tid, jlong dst, jobject src, jboolean isDirectByteBuffer, jint srcOffset, jint length) {
-    return teleProcess_write(tgid, tid, env, c, dst, src, isDirectByteBuffer, srcOffset, length);
+    ProcessHandleStruct ph = {tgid, tid};
+    return teleProcess_write(&ph, env, c, dst, src, isDirectByteBuffer, srcOffset, length);
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sun_max_tele_debug_linux_LinuxTask_nativeReadBytes(JNIEnv *env, jclass c, jint tgid, jint tid, jlong src, jobject dst, jboolean isDirectByteBuffer, jint dstOffset, jint length) {
-    return teleProcess_read(tgid, tid, env, c, src, dst, isDirectByteBuffer, dstOffset, length);
+    ProcessHandleStruct ph = {tgid, tid};
+    return teleProcess_read(&ph, env, c, src, dst, isDirectByteBuffer, dstOffset, length);
 }
 
 JNIEXPORT jboolean JNICALL
