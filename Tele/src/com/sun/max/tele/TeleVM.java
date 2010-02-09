@@ -329,7 +329,7 @@ public abstract class TeleVM implements MaxVM {
                 b.layoutPackage, b.heapPackage, b.monitorPackage,
                 b.bootCompilerPackage, b.jitCompilerPackage, null, b.trampolinePackage, b.targetABIsPackage,
                 b.runPackage);
-        vmConfiguration.loadAndInstantiateSchemes();
+        vmConfiguration.loadAndInstantiateSchemes(true);
 
         final MaxineVM vm = new MaxineVM(vmConfiguration);
         MaxineVM.setTarget(vm);
@@ -922,6 +922,10 @@ public abstract class TeleVM implements MaxVM {
 
     public final TeleCodeRegion teleRuntimeCodeRegion() {
         return teleCodeManager().teleRuntimeCodeRegion();
+    }
+
+    public final IndexedSequence<TeleCodeRegion> teleCodeRegions() {
+        return new ArraySequence<TeleCodeRegion>(teleBootCodeRegion(), teleRuntimeCodeRegion());
     }
 
     public final boolean containsInThread(Address address) {
@@ -1669,11 +1673,11 @@ public abstract class TeleVM implements MaxVM {
             teleHeapManager.initialize(processEpoch);
         }
         refreshReferences();
-        teleObjectFactory.refresh(processEpoch);
         //if (!isInGC()) { ATTETION: Could produce bugs.
         teleHeapManager.refresh(processEpoch);
         teleClassRegistry.refresh(processEpoch);
         //}
+        teleObjectFactory.refresh(processEpoch);
         Trace.end(TRACE_VALUE, refreshTracer, startTimeMillis);
     }
 

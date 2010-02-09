@@ -140,29 +140,14 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
             String toolTip = null;
             Component component;
             if (stackFrame instanceof CompiledStackFrame) {
-                final CompiledStackFrame javaStackFrame = (CompiledStackFrame) stackFrame;
-                final Address address = javaStackFrame.ip;
-                final TeleTargetMethod teleTargetMethod = maxVM().makeTeleTargetMethod(address);
-                if (teleTargetMethod != null) {
-                    name = inspection().nameDisplay().veryShortName(teleTargetMethod);
-                    toolTip = inspection().nameDisplay().longName(teleTargetMethod, address);
-                    final TeleClassMethodActor teleClassMethodActor = teleTargetMethod.getTeleClassMethodActor();
-                    if (teleClassMethodActor != null && teleClassMethodActor.isSubstituted()) {
-                        name = name + inspection().nameDisplay().methodSubstitutionShortAnnotation(teleClassMethodActor);
-                        toolTip = toolTip + inspection().nameDisplay().methodSubstitutionLongAnnotation(teleClassMethodActor);
-                    }
-                } else {
-                    final MethodActor classMethodActor = javaStackFrame.targetMethod().classMethodActor();
-                    name = classMethodActor.format("%h.%n");
-                    toolTip = classMethodActor.format("%r %H.%n(%p)");
-                }
-                if (javaStackFrame instanceof AdapterStackFrame) {
-                    name = "frame adapter [" + name + "]";
-                    if (javaStackFrame.targetMethod().compilerScheme.equals(maxVM().vmConfiguration().jitCompilerScheme())) {
-                        toolTip = "optimized-to-JIT frame adapter [ " + toolTip + "]";
-                    } else {
-                        toolTip = "JIT-to-optimized frame adapter [ " + toolTip + "]";
-                    }
+                final CompiledStackFrame compiledStackFrame = (CompiledStackFrame) stackFrame;
+                final TeleTargetMethod teleTargetMethod = maxVM().makeTeleTargetMethod(compiledStackFrame.targetMethod().codeStart());
+                name = inspection().nameDisplay().veryShortName(teleTargetMethod);
+                toolTip = inspection().nameDisplay().longName(teleTargetMethod, compiledStackFrame.ip);
+                final TeleClassMethodActor teleClassMethodActor = teleTargetMethod.getTeleClassMethodActor();
+                if (teleClassMethodActor != null && teleClassMethodActor.isSubstituted()) {
+                    name = name + inspection().nameDisplay().methodSubstitutionShortAnnotation(teleClassMethodActor);
+                    toolTip = toolTip + inspection().nameDisplay().methodSubstitutionLongAnnotation(teleClassMethodActor);
                 }
             } else if (stackFrame instanceof TruncatedStackFrame) {
                 name = "*select here to extend the display*";
@@ -220,15 +205,10 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
             if (index >= 0 && index < stackFrameListModel.getSize()) {
                 final StackFrame stackFrame = (StackFrame) stackFrameListModel.get(index);
                 // New stack frame selection; set the global focus.
-                focus().setStackFrame(thread, stackFrame, false);
+                inspection().focus().setStackFrame(thread, stackFrame, false);
                 if (stackFrame instanceof CompiledStackFrame) {
-                    if (stackFrame instanceof AdapterStackFrame) {
-                        final AdapterStackFrame adapterStackFrame = (AdapterStackFrame) stackFrame;
-                        selectedFramePanel = new AdapterStackFramePanel(inspection(), adapterStackFrame);
-                    } else {
-                        final CompiledStackFrame javaStackFrame = (CompiledStackFrame) stackFrame;
-                        selectedFramePanel = new DefaultJavaStackFramePanel(inspection(), javaStackFrame, thread, viewPreferences);
-                    }
+                    final CompiledStackFrame compiledStackFrame = (CompiledStackFrame) stackFrame;
+                    selectedFramePanel = new DefaultCompiledStackFramePanel(inspection(), compiledStackFrame, thread, viewPreferences);
                     newRightComponent = selectedFramePanel;
                 } else if (stackFrame instanceof TruncatedStackFrame) {
                     maxFramesDisplay *= 2;
@@ -288,7 +268,7 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
 
     @Override
     public void createView() {
-        thread = focus().thread();
+        thread = inspection().focus().thread();
         contentPane = new InspectorPanel(inspection(), new BorderLayout());
         if (thread != null) {
             stackFrameListModel = new DefaultListModel();
@@ -355,7 +335,7 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
         setContentPane(contentPane);
         refreshView(true);
         // TODO (mlvdv) try to set frame selection to match global focus; doesn't work.
-        updateFocusSelection(focus().stackFrame());
+        updateFocusSelection(inspection().focus().stackFrame());
 
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
@@ -410,7 +390,7 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
         menu.add(new InspectorAction(inspection(), "Select frame (Left-Button)") {
             @Override
             protected void procedure() {
-                focus().setStackFrame(thread, stackFrame, false);
+                inspection().focus().setStackFrame(thread, stackFrame, false);
             }
         });
         if (stackFrame instanceof CompiledStackFrame) {
@@ -428,7 +408,7 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
                 menu.add(new InspectorAction(inspection(), "Open native code dialog...") {
                     @Override
                     protected void procedure() {
-                        focus().setCodeLocation(maxVM().createCodeLocation(stackFrame), true);
+                        inspection().focus().setCodeLocation(maxVM().createCodeLocation(stackFrame), true);
                     }
                 });
             }
@@ -537,7 +517,7 @@ public class StackInspector extends Inspector implements TableColumnViewPreferen
         for (StackFrame stackFrame : frames) {
             if (stackFrameListModel.size()  >= maxFramesDisplay) {
                 stackFrameListModel.addElement(new TruncatedStackFrame(parentStackFrame, stackFrame));
-                gui().informationMessage("stack depth of " + stackFrameListModel.size() + " exceeds " + maxFramesDisplay + ": truncated", "Stack Inspector");
+                inspection().gui().informationMessage("stack depth of " + stackFrameListModel.size() + " exceeds " + maxFramesDisplay + ": truncated", "Stack Inspector");
                 break;
             }
             stackFrameListModel.addElement(stackFrame);
