@@ -23,7 +23,6 @@ package com.sun.max.vm.heap.gcx;
 import static com.sun.max.vm.VMOptions.*;
 
 import com.sun.max.annotate.*;
-import com.sun.max.atomic.*;
 import com.sun.max.memory.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
@@ -31,6 +30,7 @@ import com.sun.max.vm.debug.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
+import com.sun.max.vm.tele.*;
 
 /**
  * Simple free heap space management.
@@ -43,10 +43,6 @@ import com.sun.max.vm.runtime.*;
  * Each chunk of free space is at least 4-words large, and holds in its last two words the
  * address to the next free space (or 0 if none) and its size.
  *
- * Tiny objects (i.e., objects of size equals to 2 words) are handled specially and allocated from
- * a special pool. TODO: we may be better off replacing this with allocating a min
- * cell size required for the marking algorithm for tiny object .
- *
  * @author Laurent Daynes.
  */
 public class FreeHeapSpaceManager {
@@ -55,7 +51,7 @@ public class FreeHeapSpaceManager {
                         "Minimum size to be treated as a large object"), MaxineVM.Phase.PRISTINE);
 
     private static final VMIntOption freeChunkMinSizeOption =
-        register(new VMIntOption("-XX:FreeChunkMinSize=", 512,
+        register(new VMIntOption("-XX:FreeChunkMinSize=", 256,
                         "Minimum size of contiguous space considered for free space management." +
                         "Below this size, the space is ignored (dark matter)"),
                         MaxineVM.Phase.PRISTINE);
@@ -63,11 +59,12 @@ public class FreeHeapSpaceManager {
     @CONSTANT_WHEN_NOT_ZERO
     static Size minLargeObjectSize;
 
+    static int log2MinFreeChunkSize;
+
     @CONSTANT_WHEN_NOT_ZERO
     static Size minFreeChunkSize;
 
-    private static  final   Size TINY_OBJECT_SIZE = Size.fromInt(Word.size() * 2);
-
+    private static  final Size TINY_OBJECT_SIZE = Size.fromInt(Word.size() * 2);
 
     static interface AllocationFailureHandler {
         Pointer handleAllocationFailure(HeapSpaceAllocator allocator, Size size);
@@ -83,26 +80,31 @@ public class FreeHeapSpaceManager {
      * FIXME: needs HEADROOM like semi-space to make sure we're never left with not enough space
      * at the end of a chunk to plant a dead object (for heap parsability).
      */
-    class HeapSpaceAllocator {
+    class HeapSpaceAllocator extends LinearAllocationMemoryRegion {
         /**
-         * Start of allocating chunk.
-         */
-        private Address start;
-        /**
-         * End of allocating Chunk.
+         * End of space allocator.
          */
         private Address end;
-        /**
-         * Allocation mark in the current chunk.
-         */
-        private final AtomicWord mark = new AtomicWord();
 
+        /**
+         * Allocation failure handler.
+         */
         private AllocationFailureHandler allocationFailureHandler;
 
+        /**
+         * Maximum size one can allocate with this allocator. Request for size larger than this
+         * gets delegated to the allocation failure handler.
+         */
         @CONSTANT_WHEN_NOT_ZERO
         private Size sizeLimit;
 
-        HeapSpaceAllocator(AllocationFailureHandler allocationFailureHandler) {
+        /**
+         * Min TLAB Size accepted if cannot allocate quickly a TLAB of the desired size.
+         */
+        private Size minTLABSize;
+
+        HeapSpaceAllocator(String description, AllocationFailureHandler allocationFailureHandler) {
+            super(description);
             this.allocationFailureHandler = allocationFailureHandler;
         }
 
@@ -122,13 +124,16 @@ public class FreeHeapSpaceManager {
             mark.set(Address.zero());
         }
 
-
         // FIXME: concurrency
         void refill(Address chunk, Size chunkSize) {
             start = chunk;
             end = Address.zero();
             end = chunk.plus(chunkSize);
             mark.set(start);
+        }
+
+        Size freeSpaceLeft() {
+            return used();
         }
 
         @INLINE
@@ -167,8 +172,55 @@ public class FreeHeapSpaceManager {
                     // loop back to retry.
                     continue;
                 }
-            } while(mark.compareAndSwap(cell, nextMark) != cell);
+            } while (mark.compareAndSwap(cell, nextMark) != cell);
             return DebugHeap.adjustForDebugTag(cell);
+        }
+
+        /**
+         * Allocate space for a TLAB of the desired size, or less if can't quickly find
+         * a space of the exact size.
+         * @param size
+         * @return
+         */
+        final Pointer allocateTLAB(Size size) {
+            if (MaxineVM.isDebug()) {
+                FatalError.check(size.isWordAligned(), "Size must be word aligned");
+            }
+            // Try first a non-blocking allocation out of the current chunk.
+            // This may fail for a variety of reasons, all captured by the test
+            // against the current chunk limit.
+            Pointer cell;
+            Pointer nextMark;
+            do {
+                cell = top();
+                nextMark = cell.plus(size);
+                if (nextMark.greaterThan(end)) {
+                    if (end.minus(cell).lessThan(minTLABSize)) {
+                        cell = allocationFailureHandler.handleAllocationFailure(this, size);
+                        if (!cell.isZero()) {
+                            return cell;
+                        }
+                        // loop back to retry.
+                        continue;
+                    }
+                    nextMark = end.asPointer();
+                }
+            } while(mark.compareAndSwap(cell, nextMark) != cell);
+            return cell;
+        }
+
+
+        @INLINE
+        private Pointer setTopToEnd() {
+            Pointer cell;
+            do {
+                cell = top();
+                if (cell.equals(end)) {
+                    // Already at end
+                    return cell;
+                }
+            } while(mark.compareAndSwap(cell, end) != cell);
+            return cell;
         }
 
         /**
@@ -183,17 +235,13 @@ public class FreeHeapSpaceManager {
          * @return
          */
         Pointer fillUp() {
-            Pointer cell;
-            do {
-                cell = top();
-                if (cell.equals(end)) {
-                    // Already filled up
-                    return cell;
-                }
-            } while(mark.compareAndSwap(cell, end) != cell);
-            HeapSchemeAdaptor.fillWithTaggedDeadObject(cell.asPointer(), end.asPointer());
+            Pointer cell = setTopToEnd();
+            if (cell.lessThan(end)) {
+                HeapSchemeAdaptor.fillWithTaggedDeadObject(cell.asPointer(), end.asPointer());
+            }
             return cell;
         }
+
 
         // FIXME: revisit this.
         Pointer allocateAligned(Size size, int alignment) {
@@ -232,58 +280,56 @@ public class FreeHeapSpaceManager {
 
     private final HeapSpaceAllocator largeObjectAllocator;
     private final HeapSpaceAllocator smallObjectAllocator;
-    private final HeapSpaceAllocator tinyObjectAllocator;
+
+    /**
+     * Free space is managed via segregated list. The minimum chunk size managed is minFreeChunkSize.
+     */
+    final Address [] freeChunkBins = new Address[10];
+
+    /**
+     * Total space in free chunks. This doesn't include space of chunks allocated to heap space allocator.
+     */
+    long totalFreeChunkSpace;
+
+    void recordFreeSpace(Address freeChunk, Size size) {
+        int binIndex = size.toInt() >> log2MinFreeChunkSize;
+        if  (binIndex > freeChunkBins.length) {
+            binIndex = freeChunkBins.length - 1;
+        }
+        HeapFreeChunk.setFreeChunkNext(freeChunk, freeChunkBins[binIndex]);
+        freeChunkBins[binIndex] = freeChunk;
+        totalFreeChunkSpace += size.toLong();
+    }
 
     public FreeHeapSpaceManager() {
-        smallObjectAllocator = new HeapSpaceAllocator(new SmallObjectAllocationFailureHandler());
-        largeObjectAllocator = new HeapSpaceAllocator(new LargeObjectAllocationFailureHandler());
-        tinyObjectAllocator = new HeapSpaceAllocator(new TinyObjectAllocationFailureHandler());
+        totalFreeChunkSpace = 0;
+        for (int i = 0; i < freeChunkBins.length; i++) {
+            freeChunkBins[i] = Address.zero();
+        }
+        smallObjectAllocator = new HeapSpaceAllocator("Small Objects Allocator", new SmallObjectAllocationFailureHandler());
+        largeObjectAllocator = new HeapSpaceAllocator("Large Objects Allocator", new LargeObjectAllocationFailureHandler());
     }
 
     public void initialize(RuntimeMemoryRegion committedSpace) {
-        FatalError.check(committedSpace.start().isAligned(Size.K.toInt()), "committed heap space must be 1 K aligned");
         minLargeObjectSize = Size.fromInt(largeObjectsMinSizeOption.getValue());
-
-        // First off, allocate space for the tiny object pool.
-        Address tinyObjectFreePoolStart = committedSpace.start();
-        Address initialFreeChunk = tinyObjectFreePoolStart.plus(Size.K);
-
-        tinyObjectAllocator.initialize(tinyObjectFreePoolStart, Size.K, TINY_OBJECT_SIZE);
-        smallObjectAllocator.initialize(initialFreeChunk, committedSpace.size().minus(Size.K), minLargeObjectSize);
+        log2MinFreeChunkSize = Integer.highestOneBit(minLargeObjectSize.toInt());
+        smallObjectAllocator.initialize(committedSpace.start(), committedSpace.size(), minLargeObjectSize);
         largeObjectAllocator.initialize(Address.zero(), Size.zero(), Size.fromLong(Long.MAX_VALUE));
+        InspectableHeapInfo.init(smallObjectAllocator, largeObjectAllocator);
     }
 
-
     /**
-     * A simple allocation failure handler. Just refill the tiny objects pool.
-     * Delegates complexity to the small object allocator.
+     * Estimated free space left.
+     * @return
      */
-    class TinyObjectAllocationFailureHandler implements AllocationFailureHandler {
-        public synchronized Pointer handleAllocationFailure(HeapSpaceAllocator allocator, Size size) {
-            FatalError.check(size.equals(TINY_OBJECT_SIZE), "Invalid parameters to handle tiny object allocation failure");
-            // We now owned the lock that protect against concurrent refill.
-            // Let make sure no-one is going to allocate from the left-over in the allocator by filling it up.
-            Address realEnd = allocator.fillUp();
-            FatalError.check(realEnd.equals(allocator.end), "there must be no space left in tiny object alloctator on refill");
-            // Refill with another 1 K chunk.
-            Pointer tinyObjectPool = smallObjectAllocator.allocateAligned(Size.K, Size.K.toInt());
-            // The small object allocator should throw an out of memory error if it runs out of memory.
-            FatalError.check(!tinyObjectPool.isZero(), "must not reach here if out of memory");
-            allocator.refill(tinyObjectPool, Size.K);
-            // Return null so allocator retries allocation with the refilled pool.
-            return Pointer.zero();
-        }
-
-        public Pointer handleAllocationFailure(HeapSpaceAllocator allocator, Size size, int alignment) {
-            return handleAllocationFailure(allocator, size);
-        }
+    public synchronized Size freeSpaceLeft() {
+        return Size.fromLong(totalFreeChunkSpace).plus(smallObjectAllocator.freeSpaceLeft()).plus(largeObjectAllocator.freeSpaceLeft());
     }
 
     /**
      *
      */
     class SmallObjectAllocationFailureHandler implements AllocationFailureHandler {
-
         /**
          * Remaining free chunks assigned to this allocator.
          * We use an address and not a HeapFreeChunk
@@ -352,18 +398,27 @@ public class FreeHeapSpaceManager {
     }
 
     @INLINE
-    public final Pointer allocateTiny() {
-        return tinyObjectAllocator.allocate(TINY_OBJECT_SIZE);
-    }
-
-    @INLINE
     public final Pointer allocate(Size size) {
         return smallObjectAllocator.allocate(size);
     }
+
+    @INLINE
+    public final Pointer allocateTLAB(Size size) {
+        return smallObjectAllocator.allocateTLAB(size);
+    }
+
 
     @INLINE
     public final Pointer allocateLarge(Size size) {
         return largeObjectAllocator.allocate(size);
     }
 
+    /**
+     * Return value indicated if the specified number of bytes may be allocated without GC s.
+     * @param size
+     * @return
+     */
+    boolean canAllocate(Size size) {
+        return false;
+    }
 }

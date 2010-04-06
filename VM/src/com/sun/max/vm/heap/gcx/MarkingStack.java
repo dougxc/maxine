@@ -22,6 +22,7 @@ package com.sun.max.vm.heap.gcx;
 
 import static com.sun.max.vm.VMOptions.*;
 
+import com.sun.max.annotate.*;
 import com.sun.max.memory.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
@@ -34,27 +35,58 @@ import com.sun.max.vm.heap.*;
  */
 public class MarkingStack {
     private static final VMIntOption markingStackSizeOption =
-        register(new  VMIntOption("-XX:MarkingStackSize=", 16, "Size of the marking stack in number of references."),
+        register(new  VMIntOption("-XX:MarkingStackSize=", 32, "Size of the marking stack in number of references."),
                         MaxineVM.Phase.PRISTINE);
 
     Address base;
-    Address top;
-    Address end;
+    int size;
+    int topIndex = 0;
 
-    static Size size() {
-        return Size.fromInt(markingStackSizeOption.getValue());
+    CellVisitor flushingCellVisitor;
+    OverflowHandler overflowHandler;
+
+    void setCellVisitor(CellVisitor cellVisitor) {
+        flushingCellVisitor = cellVisitor;
+    }
+
+    void setOverflowHandler(OverflowHandler handler) {
+        overflowHandler = handler;
     }
 
     MarkingStack() {
     }
 
     void initialize() {
-        Size size = Size.fromInt(markingStackSizeOption.getValue() << Word.widthValue().log2numberOfBytes);
-        base = Memory.allocate(size);
+        // FIXME: can be allocated in the heap, as reference array,
+        // outside of the covered area. Root marking will skip it.
+        // Same with the other GC data structures (i.e., rescan map and mark bitmap)
+
+        size = markingStackSizeOption.getValue() << Word.widthValue().log2numberOfBytes;
+        base = Memory.allocate(Size.fromInt(size));
         if (base.isZero()) {
-            ((HeapSchemeAdaptor) VMConfiguration.target().heapScheme()).reportPristineMemoryFailure("marking stack", size);
+            ((HeapSchemeAdaptor) VMConfiguration.target().heapScheme()).reportPristineMemoryFailure("marking stack", Size.fromInt(size));
         }
-        top = base;
-        end = base.plus(size);
+    }
+
+    @INLINE
+    final boolean isEmpty() {
+        return topIndex == 0;
+    }
+
+    void push(Pointer cell) {
+        base.asPointer().setWord(topIndex++, cell);
+        if (topIndex == size) {
+            overflowHandler.recoverFromOverflow();
+        }
+    }
+
+    void flush() {
+        while (topIndex > 0) {
+            flushingCellVisitor.visitCell(base.asPointer().getWord(--topIndex).asPointer());
+        }
+    }
+
+    interface OverflowHandler {
+        void recoverFromOverflow();
     }
 }
