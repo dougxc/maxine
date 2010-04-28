@@ -179,7 +179,6 @@ public abstract class BeltwayHeapScheme extends HeapSchemeWithTLAB {
     public static Object tlabRetrieveMutex = new Object();
     public static boolean inGC = false;
     public static boolean inScavenging = false;
-    public static BeltTLAB[] scavengerTLABs = new BeltTLAB[numberOfGCThreads + 1];
 
     public BeltCellVisitor cellVisitor() {
         return cellVisitor;
@@ -225,7 +224,7 @@ public abstract class BeltwayHeapScheme extends HeapSchemeWithTLAB {
     public void initialize(MaxineVM.Phase phase) {
         super.initialize(phase);
         if (MaxineVM.isHosted()) {
-            TLAB_HEADROOM = MIN_OBJECT_SIZE.plus(MaxineVM.isDebug() ? Word.size() : 0);
+            TLAB_HEADROOM = MIN_OBJECT_SIZE.plus(DebugHeap.isTagging() ? Word.size() : 0);
             beltManager = new BeltManager(beltDescriptions());
 
             // Parallel GC support. FIXME: Should this be here at all ?
@@ -699,7 +698,7 @@ public abstract class BeltwayHeapScheme extends HeapSchemeWithTLAB {
     public final Pointer gcAllocateTLAB(RuntimeMemoryRegion gcRegion, Size size) {
         Pointer pointer = gcSynchAllocate(gcRegion, size);
         if (!pointer.isZero()) {
-            if (MaxineVM.isDebug()) {
+            if (DebugHeap.isTagging()) {
                 // Subtract one word as it will be overwritten by the debug word of the TLAB descriptor
                 pointer = pointer.minusWords(1);
             }

@@ -20,9 +20,9 @@
  */
 package com.sun.max.vm.bytecode.refmaps;
 
-import static com.sun.c1x.bytecode.Bytecodes.*;
+import static com.sun.cri.bytecode.Bytecodes.*;
 
-import com.sun.c1x.bytecode.*;
+import com.sun.cri.bytecode.*;
 import com.sun.max.annotate.*;
 import com.sun.max.program.*;
 import com.sun.max.unsafe.*;
@@ -30,6 +30,7 @@ import com.sun.max.vm.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.bytecode.*;
+import com.sun.max.vm.bytecode.graft.*;
 import com.sun.max.vm.classfile.*;
 import com.sun.max.vm.classfile.constant.*;
 import com.sun.max.vm.classfile.stackmap.*;
@@ -191,7 +192,7 @@ public abstract class ReferenceMapInterpreter {
                 if (parameterKind.isReference) {
                     updateLocal(activeLocals, true);
                 }
-                activeLocals += parameterKind.isCategory1 ? 1 : 2;
+                activeLocals += parameterKind.stackSlots;
             }
         }
 
@@ -1359,8 +1360,8 @@ public abstract class ReferenceMapInterpreter {
 
 
                 case UNSAFE_CAST: {
-                    pop(KindEnum.VALUES.get(readUnsigned1()).asKind());
-                    push(KindEnum.VALUES.get(readUnsigned1()).asKind());
+                    pop(Intrinsics.toUnsafeCastOperand((char) readUnsigned1()));
+                    push(Intrinsics.toUnsafeCastOperand((char) readUnsigned1()));
                     break;
                 }
                 case WLOAD: {
@@ -1567,19 +1568,16 @@ public abstract class ReferenceMapInterpreter {
                     skip2();
                     break;
                 }
-                case UWLT:
-                case UWLTEQ:
-                case UWGT:
-                case UWGTEQ:
-                case UGE: {
-                    skip2();
-                    popCategory1();
-                    break;
-                }
                 case MEMBAR: {
                     skip2();
                     break;
                 }
+                case LSB:
+                case MSB:
+                    skip2();
+                    popCategory2(); // pop Word whose bits are scanned
+                    pushCategory1(); // push back an int with the bit index or -1
+                    break;
                 default: {
                     FatalError.unexpected("Unknown bytcode");
                 }

@@ -29,7 +29,7 @@ import java.lang.reflect.*;
 
 import sun.reflect.*;
 
-import com.sun.c1x.bytecode.*;
+import com.sun.cri.bytecode.*;
 import com.sun.max.annotate.*;
 import com.sun.max.lang.*;
 import com.sun.max.profile.*;
@@ -55,7 +55,7 @@ import com.sun.max.vm.value.*;
 public abstract class MethodActor extends MemberActor {
 
     /**
-     * Extended {@linkplain Bytecodes#isExtension(int) opcode} for an {@linkplain INTRINSIC intrinsic} method.
+     * Extended {@linkplain Bytecodes#isStandard(int) opcode} for an {@linkplain INTRINSIC intrinsic} method.
      * A value of 0 means this method is not an intrinsic method.
      */
     private final char intrinsic;
@@ -76,7 +76,7 @@ public abstract class MethodActor extends MemberActor {
     }
 
     /**
-     * Gets the {@linkplain Bytecodes#isExtension(int) extended opcode} of this method if
+     * Gets the {@linkplain Bytecodes#isStandard(int) extended opcode} of this method if
      * it is an {@link INTRINSIC} method.
      *
      * @return 0 if this method is not an intrinsic method
@@ -244,6 +244,15 @@ public abstract class MethodActor extends MemberActor {
      */
     public final TypeDescriptor[] checkedExceptions() {
         return holder().classRegistry().get(CHECKED_EXCEPTIONS, this);
+    }
+
+    /**
+     * Gets the value of the {@link ACCESSOR} annotation that was applied to this method.
+     *
+     * @return {@code null} if this method has no {@link ACCESSOR} annotation
+     */
+    public final Class accessor() {
+        return holder().classRegistry().get(ACCESSOR, this);
     }
 
     public static MethodActor fromJava(Method javaMethod) {

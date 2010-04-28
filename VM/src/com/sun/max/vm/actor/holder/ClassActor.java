@@ -1082,11 +1082,17 @@ public abstract class ClassActor extends Actor {
 
     @HOSTED_ONLY
     private void checkProhibited(Utf8Constant typeName) {
-        if (MaxineVM.isHosted()) {
-            if (prohibitedPackagePrefix != null && !isArrayClassActor() && !InvocationStubGenerator.isGeneratedStubClassName(typeName.toString())) {
-                ProgramError.check(!typeName.toString().startsWith(prohibitedPackagePrefix), "attempt to load from prohibited package: " + typeName);
-            }
+        if (prohibitedPackagePrefix != null &&
+            !isArrayClassActor() &&
+            !InvocationStubGenerator.isGeneratedStubClassName(typeName.toString()) &&
+            typeName.string.startsWith(prohibitedPackagePrefix)) {
+            throw new ProhibitedPackageError(typeName.string);
         }
+    }
+
+    @HOSTED_ONLY
+    public static boolean isInProhibitedPackage(String className) {
+        return prohibitedPackagePrefix != null && className.startsWith(prohibitedPackagePrefix);
     }
 
     /**
@@ -1496,6 +1502,15 @@ public abstract class ClassActor extends Actor {
     @INLINE
     public final boolean isInitialized() {
         return isInitialized(initializationState);
+    }
+
+    /**
+     * Modifies the initialization state of this class actor if necessary to prevent it being verified.
+     */
+    public void doNotVerify() {
+        if (isPrepared(initializationState)) {
+            initializationState = VERIFIED;
+        }
     }
 
     /**

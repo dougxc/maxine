@@ -90,7 +90,7 @@ public final class Heap {
      * @return the size of the maximum heap specified on the command line
      */
     private static Size maxSizeOption() {
-        if (maxHeapSizeOption.isPresent() || maxHeapSizeOption.getValue().greaterThan(initialHeapSizeOption.getValue())) {
+        if (maxHeapSizeOption.isPresent() && maxHeapSizeOption.getValue().greaterThan(initialHeapSizeOption.getValue())) {
             return maxHeapSizeOption.getValue();
         }
         return initialHeapSizeOption.getValue();
@@ -242,8 +242,14 @@ public final class Heap {
         return disableGCOption.getValue();
     }
 
+    /**
+     * Used by the Inspector to uniquely identify the special boot heap region.
+     */
     @INSPECTED
-    public static final BootHeapRegion bootHeapRegion = new BootHeapRegion(Address.zero(), Size.fromInt(Integer.MAX_VALUE), "Heap-Boot");
+    private static final String HEAP_BOOT_NAME = "Heap-Boot";
+
+    @INSPECTED
+    public static final BootHeapRegion bootHeapRegion = new BootHeapRegion(Address.zero(), Size.fromInt(Integer.MAX_VALUE), HEAP_BOOT_NAME);
 
     @UNSAFE
     @FOLD
@@ -508,7 +514,7 @@ public final class Heap {
         if (!bootHeapRegion.contains(origin) && !heapScheme().contains(origin) && !Code.contains(origin) && !ImmortalHeap.getImmortalHeap().contains(origin)) {
             return false;
         }
-        if (MaxineVM.isDebug()) {
+        if (DebugHeap.isTagging()) {
             return DebugHeap.isValidNonnullGrip(grip);
         }
         return true;

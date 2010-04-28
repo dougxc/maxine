@@ -20,11 +20,11 @@
  */
 package com.sun.c1x.ir;
 
-import com.sun.c1x.ri.*;
 import com.sun.c1x.value.*;
+import com.sun.cri.ri.*;
 
 /**
- * The <code>NewObjectArray</code> instruction represents an allocation of an object array.
+ * The {@code NewObjectArray} instruction represents an allocation of an object array.
  *
  * @author Ben L. Titzer
  */
@@ -42,7 +42,7 @@ public final class NewObjectArray extends NewArray {
      * @param cpi the constant pool index
      * @param constantPool the constant pool
      */
-    public NewObjectArray(RiType elementClass, Value length, ValueStack stateBefore, char cpi, RiConstantPool constantPool) {
+    public NewObjectArray(RiType elementClass, Value length, FrameState stateBefore, char cpi, RiConstantPool constantPool) {
         super(length, stateBefore);
         this.constantPool = constantPool;
         this.elementClass = elementClass;

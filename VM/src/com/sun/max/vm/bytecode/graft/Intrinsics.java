@@ -21,8 +21,10 @@
 
 package com.sun.max.vm.bytecode.graft;
 
-import com.sun.c1x.bytecode.*;
-import com.sun.c1x.bytecode.BytecodeIntrinsifier.*;
+import static com.sun.cri.bytecode.Bytecodes.*;
+
+import com.sun.cri.bytecode.*;
+import com.sun.cri.bytecode.BytecodeIntrinsifier.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.*;
 import com.sun.max.vm.actor.member.*;
@@ -102,25 +104,63 @@ public class Intrinsics extends IntrinsifierClient {
     private static boolean isUnsafe(int opcode) {
         switch (opcode) {
             // Checkstyle: stop
-            case Bytecodes.READGPR            :
-            case Bytecodes.WRITEGPR           :
-            case Bytecodes.SAFEPOINT          :
-            case Bytecodes.PAUSE              :
-            case Bytecodes.ADD_SP             :
-            case Bytecodes.READ_PC            :
-            case Bytecodes.FLUSHW             :
-            case Bytecodes.ALLOCA             :
-            case Bytecodes.STACKADDR          :
-            case Bytecodes.JNICALL            :
-            case Bytecodes.CALL               :
-            case Bytecodes.ICMP               :
-            case Bytecodes.WCMP               :
-            case Bytecodes.RET                :
-            case Bytecodes.JSR_W              :
-            case Bytecodes.JSR                : return true;
+            case READREG            :
+            case WRITEREG           :
+            case SAFEPOINT          :
+            case PAUSE              :
+            case ADD_SP             :
+            case READ_PC            :
+            case FLUSHW             :
+            case ALLOCA             :
+            case ALLOCSTKVAR        :
+            case JNICALL            :
+            case CALL               :
+            case ICMP               :
+            case WCMP               :
+            case RET                :
+            case JSR_W              :
+            case JSR                : return true;
             // Checkstyle: resume
         }
         return false;
+    }
+
+    public static char toUnsafeOperand(Kind kind) {
+        switch (kind.asEnum) {
+            // Checkstyle: stop
+            case INT:        return 'i';
+            case BOOLEAN:    return 'z';
+            case BYTE:       return 'b';
+            case CHAR:       return 'c';
+            case DOUBLE:     return 'd';
+            case FLOAT:      return 'f';
+            case LONG:       return 'l';
+            case REFERENCE:  return 'a';
+            case SHORT:      return 's';
+            case WORD:       return 'w';
+            // Checkstyle: resume
+            default:
+                throw new IllegalArgumentException("Unknown UNSAFE_CAST type char operand: " + kind);
+        }
+    }
+
+    public static Kind toUnsafeCastOperand(char typeChar) {
+        switch (typeChar) {
+            // Checkstyle: stop
+            case 'i': return Kind.INT;
+            case 'z': return Kind.BOOLEAN;
+            case 'b': return Kind.BYTE;
+            case 'c': return Kind.CHAR;
+            case 'd': return Kind.DOUBLE;
+            case 'f': return Kind.FLOAT;
+            case 'l': return Kind.LONG;
+            case 'a': return Kind.REFERENCE;
+            case 's': return Kind.SHORT;
+            case 'w': return Kind.WORD;
+            // Checkstyle: resume
+            default:
+                throw new IllegalArgumentException("Unknown UNSAFE_CAST type char operand: " + typeChar);
+        }
     }
 
     /**
@@ -139,25 +179,30 @@ public class Intrinsics extends IntrinsifierClient {
             try {
                 MethodActor method = constant.resolve(cp, cpi);
                 int intrinsic = method.intrinsic();
-                if (intrinsic == Bytecodes.UNSAFE_CAST) {
+                if (intrinsic == UNSAFE_CAST) {
                     Kind fromKind = isStatic ? sig.parameterDescriptorAt(0).toKind() : holder.toKind();
                     Kind toKind = sig.resultKind();
-                    bi.intrinsify(Bytecodes.UNSAFE_CAST, fromKind.asEnum.ordinal() << 8 | toKind.asEnum.ordinal());
+                    char fromChar = toUnsafeOperand(fromKind);
+                    char toChar = toUnsafeOperand(toKind);
+                    bi.intrinsify(UNSAFE_CAST, fromChar << 8 | toChar);
+                } else if (intrinsic == CALL) {
+                    bi.intrinsify(intrinsic, cpi);
                 } else if (intrinsic != 0) {
                     int opcode = intrinsic & 0xff;
                     if (!unsafe) {
                         unsafe = isUnsafe(opcode);
                     }
-                    assert Bytecodes.isExtension(opcode);
-                    int operand = Bytecodes.isOpcode3(intrinsic) ? (intrinsic >> 8) & 0xffff : cpi;
+                    assert !isStandard(opcode);
+                    int operand = (intrinsic >> 8) & 0xffff;
                     bi.intrinsify(opcode, operand);
                 } else {
                     if (!unsafe) {
+                        // The semantics of @INLINE and @FOLD are only implemented by the opto compiler.
                         unsafe = (method.flags() & (Actor.FOLD | Actor.INLINE)) != 0;
                     }
                     if (holderIsWord && !isStatic) {
                         // Cannot dispatch dynamically on Word types
-                        bi.intrinsify(Bytecodes.INVOKESPECIAL, cpi);
+                        bi.intrinsify(INVOKESPECIAL, cpi);
                     }
                 }
             } catch (HostOnlyClassError e) {

@@ -25,9 +25,9 @@ import static com.sun.max.vm.compiler.snippet.ResolutionSnippet.ResolveArrayClas
 import static com.sun.max.vm.template.BytecodeTemplate.*;
 import static com.sun.max.vm.template.source.NoninlineTemplateRuntime.*;
 
-import com.sun.c1x.bytecode.*;
+import com.sun.cri.bytecode.*;
+import com.sun.cri.bytecode.Bytecodes.*;
 import com.sun.max.annotate.*;
-import com.sun.max.memory.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
@@ -2574,74 +2574,46 @@ public class BytecodeTemplateSource {
         JitStackFrameOperation.pokeLong(0, SpecialBuiltin.doubleToLong(value));
     }
 
-    @BYTECODE_TEMPLATE(UWLT)
-    public static void uwlt() {
-        Address value2 = JitStackFrameOperation.peekWord(0).asAddress();
-        Address value1 = JitStackFrameOperation.peekWord(1).asAddress();
-        JitStackFrameOperation.removeSlots(1);
-        JitStackFrameOperation.pokeInt(0, UnsafeCast.asInt(value1.lessThan(value2)));
+    @BYTECODE_TEMPLATE(LSB)
+    public static void lsb() {
+        Word value2 = JitStackFrameOperation.peekWord(0);
+        JitStackFrameOperation.pokeInt(0, value2.leastSignificantBitSet());
     }
 
-    @BYTECODE_TEMPLATE(UWLTEQ)
-    public static void uwlteq() {
-        Address value2 = JitStackFrameOperation.peekWord(0).asAddress();
-        Address value1 = JitStackFrameOperation.peekWord(1).asAddress();
-        JitStackFrameOperation.removeSlots(1);
-        JitStackFrameOperation.pokeInt(0, UnsafeCast.asInt(value1.lessEqual(value2)));
-    }
-
-    @BYTECODE_TEMPLATE(UWGT)
-    public static void uwgt() {
-        Address value2 = JitStackFrameOperation.peekWord(0).asAddress();
-        Address value1 = JitStackFrameOperation.peekWord(1).asAddress();
-        JitStackFrameOperation.removeSlots(1);
-        JitStackFrameOperation.pokeInt(0, UnsafeCast.asInt(value1.greaterThan(value2)));
-    }
-
-    @BYTECODE_TEMPLATE(UWGTEQ)
-    public static void uwgteq() {
-        Address value2 = JitStackFrameOperation.peekWord(0).asAddress();
-        Address value1 = JitStackFrameOperation.peekWord(1).asAddress();
-        JitStackFrameOperation.removeSlots(1);
-        JitStackFrameOperation.pokeInt(0, UnsafeCast.asInt(value1.greaterEqual(value2)));
-    }
-
-    @BYTECODE_TEMPLATE(UGE)
-    public static void uge() {
-        int value2 = JitStackFrameOperation.peekInt(0);
-        int value1 = JitStackFrameOperation.peekInt(1);
-        JitStackFrameOperation.removeSlots(1);
-        JitStackFrameOperation.pokeInt(0, UnsafeCast.asInt(SpecialBuiltin.unsignedIntGreaterEqual(value1, value2)));
+    @BYTECODE_TEMPLATE(MSB)
+    public static void msb() {
+        Word value2 = JitStackFrameOperation.peekWord(0);
+        JitStackFrameOperation.pokeInt(0, value2.mostSignificantBitSet());
     }
 
     @BYTECODE_TEMPLATE(MEMBAR_LOAD_LOAD)
     public static void membar_load_load() {
-        MemoryBarrier.loadLoad();
+        MemoryBarriers.loadLoad();
     }
 
     @BYTECODE_TEMPLATE(MEMBAR_LOAD_STORE)
     public static void membar_load_store() {
-        MemoryBarrier.loadStore();
+        MemoryBarriers.loadStore();
     }
 
     @BYTECODE_TEMPLATE(MEMBAR_STORE_STORE)
     public static void membar_store_store() {
-        MemoryBarrier.loadStore();
+        MemoryBarriers.loadStore();
     }
 
     @BYTECODE_TEMPLATE(MEMBAR_STORE_LOAD)
     public static void membar_store_load() {
-        MemoryBarrier.storeLoad();
+        MemoryBarriers.storeLoad();
     }
 
     @BYTECODE_TEMPLATE(MEMBAR_MEMOP_STORE)
     public static void membar_memop_store() {
-        MemoryBarrier.memopStore();
+        MemoryBarriers.memopStore();
     }
 
-    @BYTECODE_TEMPLATE(MEMBAR_ALL)
-    public static void membar_all() {
-        MemoryBarrier.all();
+    @BYTECODE_TEMPLATE(MEMBAR_FENCE)
+    public static void membar_fence() {
+        MemoryBarriers.fence();
     }
 
     @BYTECODE_TEMPLATE(SAFEPOINT)
@@ -2654,69 +2626,69 @@ public class BytecodeTemplateSource {
         SpecialBuiltin.pause();
     }
 
-    @BYTECODE_TEMPLATE(READGPR_FP_CPU)
-    public static void readgpr_fp_cpu() {
+    @BYTECODE_TEMPLATE(READREG$fp_cpu)
+    public static void readreg_fp_cpu() {
         JitStackFrameOperation.pushWord(VMRegister.getCpuFramePointer());
     }
 
-    @BYTECODE_TEMPLATE(READGPR_SP_CPU)
-    public static void readgpr_sp_cpu() {
+    @BYTECODE_TEMPLATE(READREG$sp_cpu)
+    public static void readreg_sp_cpu() {
         JitStackFrameOperation.pushWord(VMRegister.getCpuStackPointer());
     }
 
-    @BYTECODE_TEMPLATE(READGPR_FP_ABI)
-    public static void readgpr_fp_abi() {
+    @BYTECODE_TEMPLATE(READREG$fp_abi)
+    public static void readreg_fp_abi() {
         JitStackFrameOperation.pushWord(VMRegister.getAbiFramePointer());
     }
 
-    @BYTECODE_TEMPLATE(READGPR_SP_ABI)
-    public static void readgpr_sp_abi() {
+    @BYTECODE_TEMPLATE(READREG$sp_abi)
+    public static void readreg_sp_abi() {
         JitStackFrameOperation.pushWord(VMRegister.getAbiStackPointer());
     }
 
-    @BYTECODE_TEMPLATE(READGPR_LATCH)
-    public static void readgpr_latch() {
+    @BYTECODE_TEMPLATE(READREG$latch)
+    public static void readreg_latch() {
         JitStackFrameOperation.pushWord(VMRegister.getSafepointLatchRegister());
     }
 
-    @BYTECODE_TEMPLATE(WRITEGPR_FP_CPU)
-    public static void writegpr_fp_cpu() {
+    @BYTECODE_TEMPLATE(WRITEREG$fp_cpu)
+    public static void writereg_fp_cpu() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setCpuFramePointer(value);
     }
 
-    @BYTECODE_TEMPLATE(WRITEGPR_SP_CPU)
-    public static void writegpr_sp_cpu() {
+    @BYTECODE_TEMPLATE(WRITEREG$sp_cpu)
+    public static void writereg_sp_cpu() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setCpuStackPointer(value);
     }
 
-    @BYTECODE_TEMPLATE(WRITEGPR_FP_ABI)
-    public static void writegpr_fp_abi() {
+    @BYTECODE_TEMPLATE(WRITEREG$fp_abi)
+    public static void writereg_fp_abi() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setAbiFramePointer(value);
     }
 
-    @BYTECODE_TEMPLATE(WRITEGPR_SP_ABI)
-    public static void writegpr_sp_abi() {
+    @BYTECODE_TEMPLATE(WRITEREG$sp_abi)
+    public static void writereg_sp_abi() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setAbiStackPointer(value);
     }
 
-    @BYTECODE_TEMPLATE(WRITEGPR_LATCH)
-    public static void writegpr_latch() {
+    @BYTECODE_TEMPLATE(WRITEREG$latch)
+    public static void writereg_latch() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setSafepointLatchRegister(value);
     }
 
     @PLATFORM(cpu = "sparc")
-    @BYTECODE_TEMPLATE(WRITEGPR_LINK)
-    public static void writegpr_link() {
+    @BYTECODE_TEMPLATE(WRITEREG$link)
+    public static void writereg_link() {
         Word value = JitStackFrameOperation.peekWord(0);
         JitStackFrameOperation.removeSlots(1);
         VMRegister.setCallAddressRegister(value);

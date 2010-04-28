@@ -23,11 +23,12 @@ package com.sun.max.vm.compiler.c1x;
 import java.io.*;
 import java.util.*;
 
-import com.sun.c1x.ci.*;
-import com.sun.c1x.ri.*;
-import com.sun.c1x.target.x86.*;
+import com.sun.c1x.target.amd64.*;
 import com.sun.c1x.util.*;
-import com.sun.max.annotate.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiTargetMethod.*;
+import com.sun.cri.ci.CiTargetMethod.Safepoint;
+import com.sun.cri.ri.*;
 import com.sun.max.asm.*;
 import com.sun.max.asm.dis.*;
 import com.sun.max.io.*;
@@ -41,9 +42,7 @@ import com.sun.max.vm.classfile.constant.*;
 import com.sun.max.vm.compiler.*;
 import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.debug.*;
-import com.sun.max.vm.layout.Layout.*;
 import com.sun.max.vm.runtime.*;
-import com.sun.max.vm.stack.*;
 import com.sun.max.vm.thread.*;
 import com.sun.max.vm.type.*;
 
@@ -57,13 +56,14 @@ import com.sun.max.vm.type.*;
 public class MaxRiRuntime implements RiRuntime {
 
     private final C1XCompilerScheme compilerScheme;
+    private RiSnippets snippets;
 
     public MaxRiRuntime(C1XCompilerScheme compilerScheme) {
         this.compilerScheme = compilerScheme;
     }
 
-    private static final CiRegister[] generalParameterRegisters = new CiRegister[]{X86.rdi, X86.rsi, X86.rdx, X86.rcx, X86.r8, X86.r9};
-    private static final CiRegister[] xmmParameterRegisters = new CiRegister[]{X86.xmm0, X86.xmm1, X86.xmm2, X86.xmm3, X86.xmm4, X86.xmm5, X86.xmm6, X86.xmm7};
+    private static final CiRegister[] generalParameterRegisters = new CiRegister[]{AMD64.rdi, AMD64.rsi, AMD64.rdx, AMD64.rcx, AMD64.r8, AMD64.r9};
+    private static final CiRegister[] xmmParameterRegisters = new CiRegister[]{AMD64.xmm0, AMD64.xmm1, AMD64.xmm2, AMD64.xmm3, AMD64.xmm4, AMD64.xmm5, AMD64.xmm6, AMD64.xmm7};
 
     final MaxRiConstantPool globalConstantPool = new MaxRiConstantPool(this, null);
 
@@ -75,11 +75,11 @@ public class MaxRiRuntime implements RiRuntime {
      * @return the compiler interface constant pool for the specified method
      */
     public RiConstantPool getConstantPool(RiMethod method) {
-        return getConstantPool(this.asClassMethodActor(method, "getConstantPool()"));
+        return getConstantPool(asClassMethodActor(method, "getConstantPool()"));
     }
 
     private MaxRiConstantPool getConstantPool(ClassMethodActor classMethodActor) {
-        final ConstantPool cp = classMethodActor.holder().constantPool();
+        final ConstantPool cp = classMethodActor.compilee().codeAttribute().constantPool;
         synchronized (this) {
             MaxRiConstantPool constantPool = constantPools.get(cp);
             if (constantPool == null) {
@@ -125,14 +125,33 @@ public class MaxRiRuntime implements RiRuntime {
     }
 
     /**
+     * Remove once C1X can compile native method stubs.
+     */
+    public static final boolean CAN_COMPILE_NATIVE_METHODS = "true".equals(System.getenv("C1X_CAN_COMPILE_NATIVE_METHODS"));
+
+    /**
+     * Remove once C1X implements the semantics of the ACCESSOR annotation.
+     */
+    private static final boolean CAN_COMPILE_ACCESSOR_METHODS = false;
+
+    /**
      * Checks whether the runtime requires inlining of the specified method.
      * @param method the method to inline
      * @return {@code true} if the method must be inlined; {@code false}
      * to allow the compiler to use its own heuristics
      */
     public boolean mustInline(RiMethod method) {
-        ClassMethodActor classMethodActor = asClassMethodActor(method, "mustInline()");
-        return classMethodActor.isInline() && !classMethodActor.isUnsafe();
+        if (!method.isResolved()) {
+            return false;
+        }
+        final ClassMethodActor classMethodActor = asClassMethodActor(method, "mustNotInline()");
+        if (classMethodActor.accessor() != null && !CAN_COMPILE_ACCESSOR_METHODS) {
+            return false;
+        }
+        if (classMethodActor.isNative() && !CAN_COMPILE_NATIVE_METHODS) {
+            return false;
+        }
+        return classMethodActor.isInline();
     }
 
     /**
@@ -142,8 +161,18 @@ public class MaxRiRuntime implements RiRuntime {
      * {@code false} to allow the compiler to use its own heuristics
      */
     public boolean mustNotInline(RiMethod method) {
+        if (!method.isResolved()) {
+            return false;
+        }
         final ClassMethodActor classMethodActor = asClassMethodActor(method, "mustNotInline()");
-        return classMethodActor.originalCodeAttribute() == null || classMethodActor.isNeverInline() || classMethodActor.isUnsafe();
+        if (classMethodActor.accessor() != null && !CAN_COMPILE_ACCESSOR_METHODS) {
+            return true;
+        }
+        if (classMethodActor.isNative() && !CAN_COMPILE_NATIVE_METHODS) {
+            return true;
+        }
+
+        return classMethodActor.originalCodeAttribute() == null || classMethodActor.isNeverInline();
     }
 
     /**
@@ -163,10 +192,6 @@ public class MaxRiRuntime implements RiRuntime {
         throw new MaxRiUnresolved("invalid RiMethod instance: " + method.getClass());
     }
 
-    public int arrayLengthOffsetInBytes() {
-        return VMConfiguration.target().layoutScheme().arrayHeaderLayout.arrayLengthOffset();
-    }
-
     public boolean isMP() {
         return true;
     }
@@ -174,11 +199,6 @@ public class MaxRiRuntime implements RiRuntime {
     public boolean jvmtiCanPostExceptions() {
         // TODO: Check what to return here
         return false;
-    }
-
-    @UNSAFE
-    public int hubOffset() {
-        return VMConfiguration.target().layoutScheme().generalLayout.getOffsetFromOrigin(HeaderField.HUB).toInt();
     }
 
     public boolean needsExplicitNullCheck(int offset) {
@@ -190,42 +210,8 @@ public class MaxRiRuntime implements RiRuntime {
         return VmThreadLocal.EXCEPTION_OBJECT.offset;
     }
 
-    public int vtableEntryMethodOffsetInBytes() {
-        // TODO: (tw) check if 0 is correct (probably)
-        return 0;
-    }
-
-    public int vtableEntrySize() {
-        // TODO: (tw) modify, return better value
-        return 8;
-    }
-
-    public int vtableStartOffset() {
-        return VMConfiguration.target().layoutScheme().hybridLayout.headerSize();
-    }
-
-    public int firstArrayElementOffset(CiKind type) {
-        return VMConfiguration.target().layoutScheme().arrayHeaderLayout.headerSize();
-    }
-
-    public int sunMiscAtomicLongCSImplValueOffset() {
-        throw Util.unimplemented();
-    }
-
-    public int arrayHeaderSize(CiKind type) {
-        throw Util.unimplemented();
-    }
-
     public int basicObjectLockOffsetInBytes() {
         return Util.nonFatalUnimplemented(0);
-    }
-
-    public int elementHubOffset() {
-        return ClassActor.fromJava(Hub.class).findLocalInstanceFieldActor("componentHub").offset();
-    }
-
-    public int maximumArrayLength() {
-        throw Util.unimplemented();
     }
 
     public int sizeofBasicObjectLock() {
@@ -246,31 +232,84 @@ public class MaxRiRuntime implements RiRuntime {
         }
     }
 
+    @Override
+    public String disassemble(RiMethod method) {
+        ClassMethodActor classMethodActor = asClassMethodActor(method, "disassemble()");
+        return classMethodActor.format("%f %R %H.%n(%P)") + String.format("%n%s", CodeAttributePrinter.toString(classMethodActor.codeAttribute()));
+    }
+
     public String disassemble(byte[] code) {
         if (MaxineVM.isHosted()) {
             final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
             final IndentWriter writer = new IndentWriter(new OutputStreamWriter(byteArrayOutputStream));
             writer.flush();
             final ProcessorKind processorKind = VMConfiguration.target().platform().processorKind;
-            final InlineDataDecoder inlineDataDecoder = null; //InlineDataDecoder.createFrom(teleTargetMethod.getEncodedInlineDataDescriptors());
+            final InlineDataDecoder inlineDataDecoder = null;
+            final Pointer startAddress = Pointer.fromInt(0);
+            final DisassemblyPrinter disassemblyPrinter = new DisassemblyPrinter(false);
+            Disassemble.disassemble(byteArrayOutputStream, code, processorKind, startAddress, inlineDataDecoder, disassemblyPrinter);
+            return byteArrayOutputStream.toString();
+        }
+        return "";
+    }
+
+    @Override
+    public String disassemble(final CiTargetMethod targetMethod) {
+        if (MaxineVM.isHosted()) {
+            final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            final IndentWriter writer = new IndentWriter(new OutputStreamWriter(byteArrayOutputStream));
+            writer.flush();
+            final ProcessorKind processorKind = VMConfiguration.target().platform().processorKind;
+            final InlineDataDecoder inlineDataDecoder = null;
             final Pointer startAddress = Pointer.fromInt(0);
             final DisassemblyPrinter disassemblyPrinter = new DisassemblyPrinter(false) {
+                private String toString(Call call) {
+                    if (call.runtimeCall != null) {
+                        return "{" + call.runtimeCall.name() + "}";
+                    } else if (call.symbol != null) {
+                        return "{" + call.symbol + "}";
+                    } else if (call.globalStubID != null) {
+                        return "{" + call.globalStubID + "}";
+                    } else {
+                        return "{" + call.method + "}";
+                    }
+                }
+                private String siteInfo(int pcOffset) {
+                    for (Call call : targetMethod.directCalls) {
+                        if (call.pcOffset == pcOffset) {
+                            return toString(call);
+                        }
+                    }
+                    for (Call call : targetMethod.indirectCalls) {
+                        if (call.pcOffset == pcOffset) {
+                            return toString(call);
+                        }
+                    }
+                    for (Safepoint site : targetMethod.safepoints) {
+                        if (site.pcOffset == pcOffset) {
+                            return "{safepoint}";
+                        }
+                    }
+                    for (DataPatch site : targetMethod.dataReferences) {
+                        if (site.pcOffset == pcOffset) {
+                            return "{" + site.data + "}";
+                        }
+                    }
+                    return null;
+                }
+
                 @Override
                 protected String disassembledObjectString(Disassembler disassembler, DisassembledObject disassembledObject) {
                     final String string = super.disassembledObjectString(disassembler, disassembledObject);
-                    if (string.startsWith("call ")) {
-                        final BytecodeLocation bytecodeLocation = null; //_teleTargetMethod.getBytecodeLocationFor(startAddress.plus(disassembledObject.startPosition()));
-                        if (bytecodeLocation != null) {
-                            final MethodRefConstant methodRef = bytecodeLocation.getCalleeMethodRef();
-                            if (methodRef != null) {
-                                final ConstantPool pool = bytecodeLocation.classMethodActor.codeAttribute().constantPool;
-                                return string + " [" + methodRef.holder(pool).toJavaString(false) + "." + methodRef.name(pool) + methodRef.signature(pool).toJavaString(false, false) + "]";
-                            }
-                        }
+
+                    String site = siteInfo(disassembledObject.startPosition());
+                    if (site != null) {
+                        return string + " " + site;
                     }
                     return string;
                 }
             };
+            byte[] code = Arrays.copyOf(targetMethod.targetCode(), targetMethod.targetCodeSize());
             Disassemble.disassemble(byteArrayOutputStream, code, processorKind, startAddress, inlineDataDecoder, disassemblyPrinter);
             return byteArrayOutputStream.toString();
         }
@@ -279,14 +318,6 @@ public class MaxRiRuntime implements RiRuntime {
 
     public Object registerTargetMethod(CiTargetMethod ciTargetMethod, String name) {
         return new C1XTargetMethod(name, ciTargetMethod);
-    }
-
-    public RiType primitiveArrayType(CiKind elemType) {
-        return canonicalRiType(ClassActor.fromJava(elemType.primitiveArrayClass()), globalConstantPool, -1);
-    }
-
-    public int getJITStackSlotSize() {
-        return JitStackFrameLayout.JIT_SLOT_SIZE;
     }
 
     /**
@@ -360,10 +391,18 @@ public class MaxRiRuntime implements RiRuntime {
     }
 
     public boolean isObjectArrayType(RiType type) {
-        if (type.isLoaded()) {
+        if (type.isResolved()) {
             ClassActor c = ((MaxRiType) type).asClassActor("equals Object[]");
             return c.isArrayClassActor() && c == ClassActor.fromJava(Object[].class);
         }
         return false;
+    }
+
+    @Override
+    public RiSnippets getSnippets() {
+        if (snippets == null) {
+            snippets = new MaxRiSnippets(this);
+        }
+        return snippets;
     }
 }

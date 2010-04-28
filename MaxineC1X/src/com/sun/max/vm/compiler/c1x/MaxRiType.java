@@ -20,22 +20,16 @@
  */
 package com.sun.max.vm.compiler.c1x;
 
-import com.sun.c1x.C1XOptions;
-import com.sun.c1x.ci.CiConstant;
-import com.sun.c1x.ci.CiKind;
-import com.sun.c1x.ri.RiMethod;
-import com.sun.c1x.ri.RiType;
-import com.sun.max.program.ProgramError;
-import com.sun.max.vm.MaxineVM;
-import com.sun.max.vm.actor.holder.ArrayClassActor;
-import com.sun.max.vm.actor.holder.ClassActor;
-import com.sun.max.vm.actor.member.InterfaceMethodActor;
-import com.sun.max.vm.actor.member.MethodActor;
-import com.sun.max.vm.actor.member.VirtualMethodActor;
-import com.sun.max.vm.classfile.constant.ClassConstant;
-import com.sun.max.vm.type.JavaTypeDescriptor;
-import com.sun.max.vm.type.Kind;
-import com.sun.max.vm.type.TypeDescriptor;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.max.program.*;
+import com.sun.max.vm.*;
+import com.sun.max.vm.actor.holder.*;
+import com.sun.max.vm.actor.member.*;
+import com.sun.max.vm.classfile.constant.*;
+import com.sun.max.vm.type.*;
+import com.sun.max.vm.type.JavaTypeDescriptor.*;
+import com.sun.max.vm.value.*;
 
 /**
  * The {@code MaxRiType} class represents a compiler interface type,
@@ -52,7 +46,7 @@ public class MaxRiType implements RiType {
     final MaxRiConstantPool constantPool;
     ClassActor classActor;
     TypeDescriptor typeDescriptor;
-    final CiKind basicType;
+    final CiKind kind;
     final int cpi;
 
     /**
@@ -64,7 +58,7 @@ public class MaxRiType implements RiType {
         this.constantPool = constantPool;
         this.classActor = classActor;
         this.typeDescriptor = classActor.typeDescriptor;
-        this.basicType = kindToBasicType(typeDescriptor.toKind());
+        this.kind = typeDescriptor.toKind().ciKind;
         this.cpi = cpi;
     }
 
@@ -77,7 +71,7 @@ public class MaxRiType implements RiType {
     public MaxRiType(MaxRiConstantPool constantPool, ClassConstant classRef, int cpi) {
         this.constantPool = constantPool;
         this.typeDescriptor = classRef.typeDescriptor();
-        this.basicType = kindToBasicType(typeDescriptor.toKind());
+        this.kind = typeDescriptor.toKind().ciKind;
         this.cpi = cpi;
     }
 
@@ -89,13 +83,18 @@ public class MaxRiType implements RiType {
      */
     public MaxRiType(MaxRiConstantPool constantPool, TypeDescriptor typeDescriptor, int cpi) {
         this.constantPool = constantPool;
-        if (typeDescriptor instanceof JavaTypeDescriptor.AtomicTypeDescriptor) {
-            final JavaTypeDescriptor.AtomicTypeDescriptor atom = (JavaTypeDescriptor.AtomicTypeDescriptor) typeDescriptor;
-            this.classActor = ClassActor.fromJava(atom.javaClass);
+        if (typeDescriptor instanceof AtomicTypeDescriptor) {
+            final AtomicTypeDescriptor atom = (AtomicTypeDescriptor) typeDescriptor;
+            this.classActor = ClassActor.fromJava(atom.toKind().javaClass);
+        } else if (typeDescriptor instanceof WordTypeDescriptor) {
+            final WordTypeDescriptor word = (WordTypeDescriptor) typeDescriptor;
+            if (word.javaClass instanceof Class) {
+                this.classActor = ClassActor.fromJava((Class) word.javaClass);
+            }
         }
 
         this.typeDescriptor = typeDescriptor;
-        this.basicType = kindToBasicType(typeDescriptor.toKind());
+        this.kind = typeDescriptor.toKind().ciKind;
         this.cpi = cpi;
     }
 
@@ -185,7 +184,7 @@ public class MaxRiType implements RiType {
      * Checks whether this compiler interface type is loaded (i.e. resolved).
      * @return {@code true} if the type is loaded
      */
-    public boolean isLoaded() {
+    public boolean isResolved() {
         return classActor != null;
     }
 
@@ -297,11 +296,11 @@ public class MaxRiType implements RiType {
     }
 
     /**
-     * Gets the basic type for this compiler interface type.
-     * @return the basic type
+     * Gets the kind for this compiler interface type.
+     * @return the kind
      */
     public CiKind kind() {
-        return basicType;
+        return kind;
     }
 
     ClassActor asClassActor(String operation) {
@@ -319,35 +318,28 @@ public class MaxRiType implements RiType {
         return classActor.isFinal() || classActor.isPrimitiveClassActor();
     }
 
-    /**
-     * Converts a kind to a basic type.
-     * @param kind the kind
-     * @return the associated basic type
-     */
-    public static CiKind kindToBasicType(Kind kind) {
-        switch (kind.asEnum) {
+    public static CiConstant toCiConstant(Value value) {
+        switch (value.kind().asEnum) {
             case BYTE:
-                return CiKind.Byte;
+                return CiConstant.forByte(value.asByte());
             case BOOLEAN:
-                return CiKind.Boolean;
+                return CiConstant.forBoolean(value.asBoolean());
             case SHORT:
-                return CiKind.Short;
+                return CiConstant.forShort(value.asShort());
             case CHAR:
-                return CiKind.Char;
+                return CiConstant.forChar(value.asChar());
             case INT:
-                return CiKind.Int;
+                return CiConstant.forInt(value.asInt());
             case FLOAT:
-                return CiKind.Float;
+                return CiConstant.forFloat(value.asFloat());
             case LONG:
-                return CiKind.Long;
+                return CiConstant.forLong(value.asLong());
             case DOUBLE:
-                return CiKind.Double;
+                return CiConstant.forDouble(value.asDouble());
             case WORD:
-                return C1XOptions.SupportWordTypes ? CiKind.Word : CiKind.Object;
+                return CiConstant.forWord(value.asWord().asAddress().toLong());
             case REFERENCE:
-                return CiKind.Object;
-            case VOID:
-                return CiKind.Void;
+                return CiConstant.forObject(value.asObject());
             default:
                 throw ProgramError.unknownCase();
         }

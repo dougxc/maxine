@@ -23,9 +23,9 @@ package com.sun.max.tele.debug.guestvm.xen;
 import java.nio.*;
 
 import com.sun.max.collect.*;
-import com.sun.max.memory.*;
 import com.sun.max.tele.MaxWatchpoint.*;
 import com.sun.max.tele.debug.*;
+import com.sun.max.tele.memory.*;
 import com.sun.max.unsafe.*;
 
 /**
@@ -158,10 +158,10 @@ public final class GuestVMXenDBChannel {
 
     public static synchronized boolean activateWatchpoint(int domainId, TeleWatchpoint teleWatchpoint) {
         final WatchpointSettings settings = teleWatchpoint.getSettings();
-        return nativeActivateWatchpoint(domainId, teleWatchpoint.start().toLong(), teleWatchpoint.size().toLong(), true, settings.trapOnRead, settings.trapOnWrite, settings.trapOnExec);
+        return nativeActivateWatchpoint(domainId, teleWatchpoint.memoryRegion().start().toLong(), teleWatchpoint.memoryRegion().size().toLong(), true, settings.trapOnRead, settings.trapOnWrite, settings.trapOnExec);
     }
 
-    public static synchronized boolean deactivateWatchpoint(int domainId, MemoryRegion memoryRegion) {
+    public static synchronized boolean deactivateWatchpoint(int domainId, TeleFixedMemoryRegion memoryRegion) {
         return nativeDeactivateWatchpoint(domainId, memoryRegion.start().toLong(), memoryRegion.size().toLong());
     }
 

@@ -20,7 +20,7 @@
  */
 package com.sun.max.vm.actor.member;
 
-import static com.sun.c1x.bytecode.Bytecodes.*;
+import static com.sun.cri.bytecode.Bytecodes.*;
 import static com.sun.max.vm.VMOptions.*;
 
 import java.lang.reflect.*;
@@ -90,6 +90,11 @@ public abstract class ClassMethodActor extends MethodActor {
         super(name, descriptor, flags, intrinsic);
         this.originalCodeAttribute = codeAttribute;
         this.nativeFunction = isNative() ? new NativeFunction(this) : null;
+
+        if (MaxineVM.isHosted() && codeAttribute != null) {
+            ClassfileWriter.classfileCodeAttributeMap.put(this, codeAttribute);
+            ClassfileWriter.classfileCodeMap.put(this, codeAttribute.code().clone());
+        }
     }
 
     /**
@@ -126,22 +131,30 @@ public abstract class ClassMethodActor extends MethodActor {
 
     @INLINE
     public final boolean noSafepoints() {
-        return noSafepoints(compilee().flags());
+        return noSafepoints(flags());
     }
 
     @INLINE
     public final boolean isDeclaredFoldable() {
-        return isDeclaredFoldable(compilee().flags());
+        return isDeclaredFoldable(flags());
     }
 
     /**
-     * Gets the CodeAttribute currently associated with this actor, irrespective of whether or not it will be replaced
-     * later as a result of substitution or preprocessing.
+     * Gets the {@code CodeAttribute} with which this method actor was originally constructed.
      *
-     * Note: This method must not be synchronized as it is called by a GC thread during stack walking.
-     * @return the raw code attribute
+     * This is basically a hack to ensure that C1X can obtain code that hasn't been subject to
+     * the {@linkplain Preprocessor preprocessing} required by the CPS and template JIT compilers.
      */
     public final CodeAttribute originalCodeAttribute() {
+        if (isNative()) {
+            // C1X must compile the generated JNI stub
+            return codeAttribute();
+        }
+
+        // This call ensures that intrinsification is performed on the bytecode array in
+        // 'originalCodeAttribute' before it is returned.
+        compilee();
+
         return originalCodeAttribute;
     }
 
@@ -179,6 +192,7 @@ public abstract class ClassMethodActor extends MethodActor {
                     if (substitute != null) {
                         compilee = substitute.compilee();
                         codeAttribute = compilee.codeAttribute;
+                        originalCodeAttribute = compilee.originalCodeAttribute;
                         return compilee;
                     }
                     if (MaxineVM.isHosted() && !hostedVerificationDisabled) {
@@ -233,17 +247,10 @@ public abstract class ClassMethodActor extends MethodActor {
                     }
                 }
 
-                if (codeAttribute != null) {
-                    Intrinsics intrinsics = new Intrinsics(compilee, codeAttribute);
-                    intrinsics.run();
-                    if (intrinsics.unsafe) {
-                        compilee.beUnsafe();
-                        beUnsafe();
-                    }
-                    if (intrinsics.extended) {
-                        compilee.beExtended();
-                        beExtended();
-                    }
+                intrinsify(compilee, codeAttribute);
+                if (codeAttribute != originalCodeAttribute && originalCodeAttribute != null) {
+                    // C1X must also see the intrinsified code
+                    intrinsify(compilee, originalCodeAttribute);
                 }
 
                 this.codeAttribute = codeAttribute;
@@ -251,6 +258,23 @@ public abstract class ClassMethodActor extends MethodActor {
             }
         }
         return compilee;
+    }
+
+    private boolean intrinsify(ClassMethodActor compilee, CodeAttribute codeAttribute) {
+        if (codeAttribute != null) {
+            Intrinsics intrinsics = new Intrinsics(compilee, codeAttribute);
+            intrinsics.run();
+            if (intrinsics.unsafe) {
+                compilee.beUnsafe();
+                beUnsafe();
+            }
+            if (intrinsics.extended) {
+                compilee.beExtended();
+                beExtended();
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

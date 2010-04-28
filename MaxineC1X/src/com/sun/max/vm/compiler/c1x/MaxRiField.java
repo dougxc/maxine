@@ -21,8 +21,8 @@
 package com.sun.max.vm.compiler.c1x;
 
 import com.sun.c1x.*;
-import com.sun.c1x.ci.*;
-import com.sun.c1x.ri.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.classfile.constant.*;
@@ -43,7 +43,7 @@ import com.sun.max.vm.value.*;
 public class MaxRiField implements RiField {
 
     final MaxRiConstantPool constantPool;
-    final CiKind basicType; // cached for performance
+    final CiKind kind; // cached for performance
     final FieldRefConstant fieldRef;
     final int cpi;
     FieldActor fieldActor;
@@ -56,7 +56,7 @@ public class MaxRiField implements RiField {
     public MaxRiField(MaxRiConstantPool constantPool, FieldActor fieldActor, int cpi) {
         this.constantPool = constantPool;
         this.fieldActor = fieldActor;
-        this.basicType = MaxRiType.kindToBasicType(fieldActor.kind);
+        this.kind = fieldActor.kind.ciKind;
         this.fieldRef = null;
         this.cpi = cpi;
     }
@@ -70,14 +70,10 @@ public class MaxRiField implements RiField {
     public MaxRiField(MaxRiConstantPool constantPool, FieldRefConstant fieldRef, int cpi) {
         this.constantPool = constantPool;
         this.fieldRef = fieldRef;
-        this.basicType = MaxRiType.kindToBasicType(fieldRef.type(constantPool.constantPool).toKind());
+        this.kind = fieldRef.type(constantPool.constantPool).toKind().ciKind;
         this.cpi = cpi;
     }
 
-    /**
-     * Gets the name of this field as a string.
-     * @return the name of the field
-     */
     public String name() {
         if (fieldActor != null) {
             return fieldActor.name.string;
@@ -85,10 +81,6 @@ public class MaxRiField implements RiField {
         return fieldRef.name(constantPool.constantPool).string;
     }
 
-    /**
-     * Gets the compiler interface type of this field.
-     * @return the compiler interface type
-     */
     public RiType type() {
         if (fieldActor != null) {
             return constantPool.runtime.canonicalRiType(fieldActor.type(), constantPool, -1);
@@ -97,39 +89,22 @@ public class MaxRiField implements RiField {
         return new MaxRiType(constantPool, fieldRef.type(constantPool.constantPool), -1);
     }
 
-    /**
-     * Gets the basic type for the this field.
-     * @return the basic type for this field
-     */
     public CiKind kind() {
-        return basicType;
+        return kind;
     }
 
-    /**
-     * Gets the holder of this field.
-     * @return the compiler interface type that represents the holder
-     */
     public RiType holder() {
         if (fieldActor != null) {
             return constantPool.runtime.canonicalRiType(fieldActor.holder(), constantPool, -1);
         }
-        // TODO: get the correct cpi of the field's holder
-        return new MaxRiType(constantPool, fieldRef.holder(constantPool.constantPool), -1);
+        int holderCpi = PoolConstant.Static.holderIndex(fieldRef);
+        return new MaxRiType(constantPool, fieldRef.holder(constantPool.constantPool), holderCpi);
     }
 
-    /**
-     * Checks whether this compiler interface field is loaded (i.e. resolved).
-     * @return {@code true} if this field is loaded
-     */
-    public boolean isLoaded() {
+    public boolean isResolved() {
         return fieldActor != null;
     }
 
-    /**
-     * Checks whether this field is static.
-     * @return {@code true} if this field is static
-     * @throws MaxRiUnresolved if the field is unresolved
-     */
     public boolean isStatic() {
         if (fieldActor != null) {
             return fieldActor.isStatic();
@@ -137,11 +112,6 @@ public class MaxRiField implements RiField {
         throw unresolved("isStatic()");
     }
 
-    /**
-     * Checks whether this field is volatile.
-     * @return {@code true} if the field is volatile
-     * @throws MaxRiUnresolved if the field is unresolved
-     */
     public boolean isVolatile() {
         if (fieldActor != null) {
             return fieldActor.isVolatile();
@@ -149,16 +119,13 @@ public class MaxRiField implements RiField {
         throw unresolved("isVolatile()");
     }
 
-    /**
-     * Checks whether this field is a constant.
-     * @return {@code true} if the field is resolved and is a constant
-     */
     public boolean isConstant()  {
         return fieldActor != null && fieldActor.isConstant();
     }
 
     /**
      * Gets the offset from the origin of the object for this field.
+     *
      * @return the offset in bytes
      * @throws MaxRiUnresolved if the field is unresolved
      */
@@ -169,26 +136,29 @@ public class MaxRiField implements RiField {
         throw unresolved("offset()");
     }
 
-    /**
-     * Gets the constant value for this field, if it is a constant.
-     * @return the compiler interface constant for this field
-     */
-    public CiConstant constantValue() {
+    public CiConstant constantValue(Object object) {
         if (fieldActor != null && fieldActor.isConstant()) {
-            if (!fieldActor.isStatic()) {
-                throw new IllegalArgumentException("constantValue() is only defined for static fields");
-            }
-            Value v = fieldActor.constantValue();
-            if (v != null) {
-                return new CiConstant(MaxRiType.kindToBasicType(v.kind()), v.asBoxedJavaValue());
+            Value v;
+            if (fieldActor.isStatic()) {
+                v = fieldActor.constantValue();
+                if (v != null) {
+                    return MaxRiType.toCiConstant(v);
+                }
             }
             if (C1XOptions.CanonicalizeFinalFields) {
-                if (MaxineVM.isHosted()) {
-                    v = HostTupleAccess.readValue(null, fieldActor);
+                if (fieldActor.isStatic()) {
+                    assert object == null;
+                    object = fieldActor.holder().staticTuple();
                 } else {
-                    v = fieldActor.readValue(Reference.fromJava(fieldActor.holder().staticTuple()));
+                    assert object != null;
                 }
-                return new CiConstant(MaxRiType.kindToBasicType(v.kind()), v.asBoxedJavaValue());
+
+                if (MaxineVM.isHosted()) {
+                    v = HostTupleAccess.readValue(object, fieldActor);
+                } else {
+                    v = fieldActor.readValue(Reference.fromJava(object));
+                }
+                return MaxRiType.toCiConstant(v);
             }
         }
         return null;

@@ -102,13 +102,13 @@ public abstract class TargetMethod extends RuntimeMemoryRegion {
     public TargetMethod(String description, TargetABI abi) {
         this.classMethodActor = null;
         this.abi = abi;
-        setDescription(description);
+        setRegionName(description);
     }
 
     public TargetMethod(ClassMethodActor classMethodActor, TargetABI abi) {
         this.classMethodActor = classMethodActor;
         this.abi = abi;
-        setDescription(classMethodActor.name.toString());
+        setRegionName(classMethodActor.name.toString());
     }
 
     public int registerRestoreEpilogueOffset() {
@@ -136,6 +136,16 @@ public abstract class TargetMethod extends RuntimeMemoryRegion {
      *         no bytecode location can be determined for {@code instructionPointer}.
      */
     public BytecodeLocation getBytecodeLocationFor(Pointer instructionPointer, boolean implicitExceptionPoint) {
+        return null;
+    }
+
+    /**
+     * Gets the bytecode locations for the inlining chain rooted at a given stop.
+     *
+     * @param stopIndex an index of a stop within this method
+     * @return the bytecode locations for the inlining chain rooted at the denoted stop
+     */
+    public BytecodeLocation getBytecodeLocationFor(int stopIndex) {
         return null;
     }
 
@@ -529,7 +539,7 @@ public abstract class TargetMethod extends RuntimeMemoryRegion {
 
     @Override
     public final String toString() {
-        return (classMethodActor == null) ? description() : classMethodActor.format("%H.%n(%p)");
+        return (classMethodActor == null) ? regionName() : classMethodActor.format("%H.%n(%p)");
     }
 
     protected final void setABI(TargetABI abi) {
@@ -556,7 +566,7 @@ public abstract class TargetMethod extends RuntimeMemoryRegion {
     }
 
     public String name() {
-        return description();
+        return regionName();
     }
 
     public final String traceToString() {

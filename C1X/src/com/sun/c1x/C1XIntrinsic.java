@@ -23,8 +23,8 @@ package com.sun.c1x;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.sun.c1x.ri.*;
-import com.sun.c1x.util.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This enum represents all of the intrinsics, i.e. a library methods that
@@ -119,10 +119,6 @@ public enum C1XIntrinsic {
     // sun.reflect.Reflection
     sun_reflect_Reflection$getClassAccessFlags ("(Ljava/lang/Class;)I"),
     sun_reflect_Reflection$getCallerClass      ("(I)Ljava/lang/Class;"),
-
-    // sun.misc.AtomicLongCSImpl
-    sun_misc_AtomicLongCSImpl$get ("()J"),
-    sun_misc_AtomicLongCSImpl$attemptUpdate ("(JJ)Z"),
 
     // sun.misc.Unsafe
     sun_misc_Unsafe$allocateInstance ("(Ljava/lang/Class;)Ljava/lang/Object;"),
@@ -264,7 +260,7 @@ public enum C1XIntrinsic {
         // iterate through all the intrinsics and add them to the map
         for (C1XIntrinsic i : C1XIntrinsic.values()) {
             // note that the map uses internal names to map lookup faster
-            String className = Util.toInternalName(i.className());
+            String className = CiUtil.toInternalName(i.className());
             HashMap<String, C1XIntrinsic> map = intrinsicMap.get(className);
             if (map == null) {
                 map = new HashMap<String, C1XIntrinsic>();
@@ -278,11 +274,11 @@ public enum C1XIntrinsic {
      * Looks up an intrinsic for the specified method.
      * @param method the compiler interface method
      * @return a reference to the intrinsic for the method, if the method is an intrinsic
-     * (and is loaded); <code>null</code> otherwise
+     * (and is loaded); {@code null} otherwise
      */
     public static C1XIntrinsic getIntrinsic(RiMethod method) {
         RiType holder = method.holder();
-        if (method.isLoaded() && holder.isLoaded() && holder.isInitialized()) {
+        if (method.isResolved() && holder.isResolved() && holder.isInitialized()) {
             // note that the map uses internal names to make lookup faster
             HashMap<String, C1XIntrinsic> map = intrinsicMap.get(holder.name());
             if (map != null) {
@@ -310,7 +306,7 @@ public enum C1XIntrinsic {
     /**
      * Looks up the foldable reflective method for a compiler interface method, if it one is registered.
      * @param riMethod the compiler interface method
-     * @return the reflective method for the compiler interface method, if one is register; <code>null</code>
+     * @return the reflective method for the compiler interface method, if one is register; {@code null}
      * otherwise
      */
     public static Method getFoldableMethod(RiMethod riMethod) {
