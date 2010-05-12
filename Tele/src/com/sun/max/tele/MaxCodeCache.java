@@ -20,7 +20,10 @@
  */
 package com.sun.max.tele;
 
+import java.io.*;
+
 import com.sun.max.collect.*;
+import com.sun.max.tele.object.*;
 import com.sun.max.unsafe.*;
 
 /**
@@ -51,5 +54,55 @@ public interface MaxCodeCache extends MaxEntity<MaxCodeCache> {
      * @return the code cache region, if any, that includes that location
      */
     MaxCompiledCodeRegion findCompiledCodeRegion(Address address);
+
+    /**
+     * Gets the existing compiled code, if known, that contains a given address in the VM;
+     * the result could be a compiled method or a block of machine code about which little is known.
+     *
+     * @param address a memory location in the VM
+     * @return the code, if any is known, that includes the address
+     */
+    MaxCompiledCode findCompiledCode(Address address);
+
+    /**
+     * Get the method compilation, if any, that contains a given address in the VM.
+     *
+     * @param address memory location in the VM
+     * @return a compiled method whose code includes the address, null if none
+     */
+    MaxCompiledCode findCompiledMethod(Address address);
+
+    /**
+     * Get the block of known native code, if any, that contains a given address in the VM.
+     *
+     * @param address memory location in the VM
+     * @return known native code that includes the address, null if none
+     */
+    MaxCompiledCode findCompiledNativeCode(Address address);
+
+    /**
+     * @return gets all compilations of a method in the VM, empty if none
+     */
+    IndexedSequence<MaxCompiledCode> compilations(TeleClassMethodActor teleClassMethodActor);
+
+    /**
+     * Gets the most recent compilation of a method in the VM, null if none.
+     */
+    MaxCompiledCode latestCompilation(TeleClassMethodActor teleClassMethodActor);
+
+    /**
+     * Create a new TeleCompiledNativeCode for a block of native code in the VM that has not yet been registered.
+     *
+     * @param codeStart starting address of the code in VM memory
+     * @param codeSize presumed size of the code
+     * @param name an optional name to be assigned to the block of code; a simple address-based name used if null.
+     * @return a newly created TeleCompiledNativeCode
+     */
+    TeleCompiledNativeCode createTeleNativeTargetRoutine(Address codeStart, Size codeSize, String name);
+
+    /**
+     * Writes a textual summary describing all instances of {@link MaxCompiledCode} known to the VM.
+     */
+    void writeSummary(PrintStream printStream);
 
 }

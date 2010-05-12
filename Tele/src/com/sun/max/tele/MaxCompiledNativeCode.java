@@ -18,23 +18,16 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package com.sun.max.tele.method;
+package com.sun.max.tele;
 
-import com.sun.max.tele.*;
-import com.sun.max.unsafe.*;
 
 /**
- * Represents a region of VM memory that holds compiled code for native code about which we know little.
+ * Data describing a single block of machine code representing a native routine
+ * about which little is known.
  *
  * @author Michael Van De Vanter
-  */
-public final class NativeTargetCodeRegion extends TargetCodeRegion {
-
-    private final TeleNativeTargetRoutine teleNativeTargetRoutine;
-
-    public NativeTargetCodeRegion(TeleVM teleVM, TeleNativeTargetRoutine teleNativeTargetRoutine, Address start, Size size) {
-        super(teleVM, teleNativeTargetRoutine, start, size, "Native TeleTarget-" + teleNativeTargetRoutine.toString());
-        this.teleNativeTargetRoutine = teleNativeTargetRoutine;
-    }
+ */
+@Deprecated
+public interface MaxCompiledNativeCode extends MaxCompiledCode {
 
 }

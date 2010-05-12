@@ -70,7 +70,7 @@ import com.sun.max.vm.value.*;
  */
 public final class TeleObjectFactory extends AbstractTeleVMHolder{
 
-    private static final int TRACE_VALUE = 2;
+    private static final int TRACE_VALUE = 1;
 
     private static TeleObjectFactory teleObjectFactory;
 
@@ -277,12 +277,12 @@ public final class TeleObjectFactory extends AbstractTeleVMHolder{
                 try {
                     teleObject = (TeleObject) constructor.newInstance(vm(), reference);
                 } catch (InstantiationException e) {
-                    throw ProgramError.unexpected();
+                    ProgramError.unexpected();
                 } catch (IllegalAccessException e) {
-                    throw ProgramError.unexpected();
+                    ProgramError.unexpected();
                 } catch (InvocationTargetException e) {
                     e.printStackTrace();
-                    throw ProgramError.unexpected();
+                    ProgramError.unexpected();
                 }
             }
         } else {
