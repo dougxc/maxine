@@ -239,7 +239,7 @@ public class WordValueLabel extends ValueLabel {
     private TeleClassActor teleClassActor;
 
     /** Non-null if a code pointer. */
-    private TeleTargetMethod teleTargetMethod;
+    private MaxCompiledMethod compiledMethod;
 
     /** Non-null if a stack reference. */
     private MaxThread thread;
@@ -248,7 +248,7 @@ public class WordValueLabel extends ValueLabel {
     public final void setValue(Value newValue) {
         teleObject = null;
         teleClassActor = null;
-        teleTargetMethod = null;
+        compiledMethod = null;
         thread = null;
 
         if (newValue == VoidValue.VOID) {
@@ -307,9 +307,9 @@ public class WordValueLabel extends ValueLabel {
                             displayMode = DisplayMode.INVALID_OBJECT_REFERENCE;
                         } else {
                             try {
-                                teleTargetMethod = vm().makeTeleTargetMethod(newValue.toWord().asAddress());
-                                if (teleTargetMethod != null) {
-                                    final Address codeStart = teleTargetMethod.getCodeStart();
+                                compiledMethod = vm().codeCache().findCompiledMethod(newValue.toWord().asAddress());
+                                if (compiledMethod != null) {
+                                    final Address codeStart = compiledMethod.getCodeStart();
                                     final Word jitEntryPoint = codeStart.plus(CallEntryPoint.JIT_ENTRY_POINT.offset());
                                     final Word optimizedEntryPoint = codeStart.plus(CallEntryPoint.OPTIMIZED_ENTRY_POINT.offset());
                                     if (newValue.toWord().equals(optimizedEntryPoint) || newValue.toWord().equals(jitEntryPoint)) {
@@ -509,14 +509,14 @@ public class WordValueLabel extends ValueLabel {
                 setFont(style().wordDataFont());
                 setForeground(style().wordCallEntryPointColor());
                 setText(hexString);
-                setToolTipText("Code: " + inspection().nameDisplay().longName(teleTargetMethod));
+                setToolTipText("Code: " + inspection().nameDisplay().longName(compiledMethod));
                 break;
             }
             case CALL_ENTRY_POINT_TEXT: {
                 setFont(style().wordAlternateTextFont());
                 setForeground(style().wordCallEntryPointColor());
-                setText(inspection().nameDisplay().veryShortName(teleTargetMethod));
-                setToolTipText("Code: " + inspection().nameDisplay().longName(teleTargetMethod));
+                setText(inspection().nameDisplay().veryShortName(compiledMethod));
+                setToolTipText("Code: " + inspection().nameDisplay().longName(compiledMethod));
                 break;
             }
             case CLASS_ACTOR_ID: {
@@ -539,17 +539,17 @@ public class WordValueLabel extends ValueLabel {
                 setFont(style().wordDataFont());
                 setForeground(style().wordCallReturnPointColor());
                 setText(hexString);
-                if (teleTargetMethod != null) {
-                    setToolTipText("Code: " + inspection().nameDisplay().longName(teleTargetMethod, value.toWord().asAddress()));
+                if (compiledMethod != null) {
+                    setToolTipText("Code: " + inspection().nameDisplay().longName(compiledMethod, value.toWord().asAddress()));
                 }
                 break;
             }
             case CALL_RETURN_POINT_TEXT: {
                 setFont(style().wordAlternateTextFont());
                 setForeground(style().wordCallReturnPointColor());
-                if (teleTargetMethod != null) {
-                    setText(inspection().nameDisplay().veryShortName(teleTargetMethod, value.toWord().asAddress()));
-                    setToolTipText("Code: " + inspection().nameDisplay().longName(teleTargetMethod, value.toWord().asAddress()));
+                if (compiledMethod != null) {
+                    setText(inspection().nameDisplay().veryShortName(compiledMethod, value.toWord().asAddress()));
+                    setToolTipText("Code: " + inspection().nameDisplay().longName(compiledMethod, value.toWord().asAddress()));
                 }
                 break;
             }
@@ -563,7 +563,7 @@ public class WordValueLabel extends ValueLabel {
             case FLAGS: {
                 setFont(style().wordFlagsFont());
                 setForeground(null);
-                setText(vm().visualizeStateRegister(value.toLong()));
+                setText(focus().thread().registers().stateRegisterValueToString(value.toLong()));
                 setToolTipText("Flags 0x" + hexString);
                 break;
             }
@@ -874,8 +874,8 @@ public class WordValueLabel extends ValueLabel {
                 }
                 case CALL_ENTRY_POINT_TEXT:
                 case CALL_RETURN_POINT_TEXT: {
-                    if (teleTargetMethod != null) {
-                        transferable = new InspectorTransferable.TeleObjectTransferable(inspection(), teleTargetMethod);
+                    if (compiledMethod != null) {
+                        transferable = new InspectorTransferable.TeleObjectTransferable(inspection(), compiledMethod.teleTargetMethod());
                     } else {
                         transferable = new InspectorTransferable.AddressTransferable(inspection(), address);
                     }

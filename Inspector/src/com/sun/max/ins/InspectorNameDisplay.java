@@ -180,9 +180,10 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     /**
      * E.g.: "[n]", where n is the index into the compilation history; first compilation n=0.
      */
-    public String methodCompilationID(TeleTargetMethod teleTargetMethod) {
-        if (teleTargetMethod != null && teleTargetMethod.getTeleClassMethodActor() != null) {
-            final int compilationIndex = teleTargetMethod.getTeleClassMethodActor().indexOf(teleTargetMethod);
+    public String methodCompilationID(MaxCompiledMethod compiledMethod) {
+        // Only have an index if a compiled method.
+        if (compiledMethod != null && compiledMethod.getTeleClassMethodActor() != null) {
+            final int compilationIndex = compiledMethod.compilationIndex();
             if (compilationIndex >= 0) {
                 return "[" + compilationIndex + "]";
             }
@@ -207,15 +208,23 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     /**
      * E.g. "Element.foo()[0]"
      */
-    public String veryShortName(TeleTargetMethod teleTargetMethod) {
-        return teleTargetMethod.classMethodActor() == null ? teleTargetMethod.getRegionName() : teleTargetMethod.classMethodActor().format("%h.%n()" + methodCompilationID(teleTargetMethod));
+    public String veryShortName(MaxCompiledMethod compiledMethod) {
+        if (compiledMethod == null) {
+            return "<?>";
+        }
+        return compiledMethod.classMethodActor() == null ?
+                        compiledMethod.entityName() :
+                            compiledMethod.classMethodActor().format("%h.%n()" + methodCompilationID(compiledMethod));
     }
+
 
     /**
      * E.g. "foo(Pointer, Word, int[])[0]"
      */
-    public String shortName(TeleTargetMethod teleTargetMethod) {
-        return teleTargetMethod.classMethodActor() == null ? teleTargetMethod.getRegionName() : teleTargetMethod.classMethodActor().format("%n(%p)" + methodCompilationID(teleTargetMethod));
+    public String shortName(MaxCompiledMethod compiledMethod) {
+        return compiledMethod.classMethodActor() == null ?
+                        compiledMethod.entityName() :
+                            compiledMethod.classMethodActor().format("%n(%p)" + methodCompilationID(compiledMethod));
     }
 
     /**
@@ -223,22 +232,22 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
      *
      * @param returnTypeSpecification specifies where the return type should appear in the returned value
      */
-    public String shortName(TeleTargetMethod teleTargetMethod, ReturnTypeSpecification returnTypeSpecification) {
-        final ClassMethodActor classMethodActor = teleTargetMethod.classMethodActor();
+    public String shortName(MaxCompiledMethod compiledMethod, ReturnTypeSpecification returnTypeSpecification) {
+        final ClassMethodActor classMethodActor = compiledMethod.classMethodActor();
 
         if (classMethodActor == null) {
-            return teleTargetMethod.getRegionName();
+            return compiledMethod.entityName();
         }
 
         switch (returnTypeSpecification) {
             case ABSENT: {
-                return classMethodActor.format("%n(%p)" + methodCompilationID(teleTargetMethod));
+                return classMethodActor.format("%n(%p)" + methodCompilationID(compiledMethod));
             }
             case AS_PREFIX: {
-                return classMethodActor.format("%r %n(%p)" + methodCompilationID(teleTargetMethod));
+                return classMethodActor.format("%r %n(%p)" + methodCompilationID(compiledMethod));
             }
             case AS_SUFFIX: {
-                return classMethodActor.format("%n(%p)" + methodCompilationID(teleTargetMethod) + " %r");
+                return classMethodActor.format("%n(%p)" + methodCompilationID(compiledMethod) + " %r");
             }
             default: {
                 throw ProgramError.unknownCase();
@@ -246,9 +255,9 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
         }
     }
 
-    private String positionString(TeleTargetMethod teleTargetMethod, Address address) {
-        final Pointer entry = teleTargetMethod.getCodeStart();
-        final long position = address.minus(entry.asAddress()).toLong();
+    private String positionString(MaxCompiledMethod compiledMethod, Address address) {
+        final Address entry = compiledMethod.getCodeStart();
+        final long position = address.minus(entry).toLong();
         return position == 0 ? "" : "+0x" + Long.toHexString(position);
     }
 
@@ -259,32 +268,32 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     /**
      * E.g. "int foo(Pointer, Word, int[])[0] in com.sun.max.ins.Bar"
      */
-    public String longName(TeleTargetMethod teleTargetMethod) {
-        return teleTargetMethod.classMethodActor() == null ? name(teleTargetMethod.targetMethod()) : teleTargetMethod.classMethodActor().format("%r %n(%p)" + methodCompilationID(teleTargetMethod) + " in %H");
+    public String longName(MaxCompiledMethod compiledMethod) {
+        return compiledMethod.classMethodActor() ==
+            null ? compiledMethod.entityDescription() :
+                compiledMethod.classMethodActor().format("%r %n(%p)" + methodCompilationID(compiledMethod) + " in %H");
     }
 
     /**
      * E.g. "foo()[0]+0x7"
      */
-    public String veryShortName(TeleTargetMethod teleTargetMethod, Address address) {
-        return teleTargetMethod.classMethodActor() == null ? name(teleTargetMethod.targetMethod()) : teleTargetMethod.classMethodActor().format("%n()" + methodCompilationID(teleTargetMethod) + positionString(teleTargetMethod, address));
-    }
-
-    /**
-     * E.g. "int foo(Pointer, Word, int[])[0]+0x7"
-     */
-    public String shortName(TeleTargetMethod teleTargetMethod, Address address) {
-        return teleTargetMethod.classMethodActor() == null ? name(teleTargetMethod.targetMethod()) : teleTargetMethod.classMethodActor().format("%r %n(%p)" + methodCompilationID(teleTargetMethod) + positionString(teleTargetMethod, address));
+    public String veryShortName(MaxCompiledMethod compiledMethod, Address address) {
+        return compiledMethod.classMethodActor() ==
+            null ? compiledMethod.entityName() :
+                compiledMethod.classMethodActor().format("%n()" + methodCompilationID(compiledMethod) + positionString(compiledMethod, address));
     }
 
     /**
      * E.g. "int foo(Pointer, Word, int[])[0]+0x7 in com.sun.max.ins.Bar"
      */
-    public String longName(TeleTargetMethod teleTargetMethod, Address address) {
-        if (teleTargetMethod.classMethodActor() != null) {
-            return teleTargetMethod.classMethodActor().format("%r %n(%p)" + methodCompilationID(teleTargetMethod) + positionString(teleTargetMethod, address) + " in %H");
+    public String longName(MaxCompiledMethod compiledMethod, Address address) {
+        if (compiledMethod == null) {
+            return "<?>";
         }
-        return name(teleTargetMethod.targetMethod());
+        if (compiledMethod.classMethodActor() != null) {
+            return compiledMethod.classMethodActor().format("%r %n(%p)" + methodCompilationID(compiledMethod) + positionString(compiledMethod, address) + " in %H");
+        }
+        return compiledMethod.entityName();
     }
 
     /**
@@ -323,17 +332,17 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     /**
      * E.g. user supplied name or "@0xffffffffffffffff"
      */
-    public String shortName(TeleNativeTargetRoutine teleNativeTargetRoutine) {
-        final String title = teleNativeTargetRoutine.getName();
-        return title == null ? "@0x" + teleNativeTargetRoutine.getCodeStart().toHexString() : title;
+    public String shortName(MaxCompiledNativeCode compiledNativeCode) {
+        final String title = compiledNativeCode.entityName();
+        return title == null ? "@0x" + compiledNativeCode.getCodeStart().toHexString() : title;
     }
 
     /**
      * E.g. user supplied name or "Native code @0xffffffffffffffff"
      */
-    public String longName(TeleNativeTargetRoutine teleNativeTargetRoutine) {
-        final String title = teleNativeTargetRoutine.getName();
-        return title == null ? "Native code @0x" + teleNativeTargetRoutine.getCodeStart().toHexString() : "Native code: " + title;
+    public String longName(MaxCompiledNativeCode compiledNativeCode) {
+        final String title = compiledNativeCode.entityName();
+        return title == null ? "Native code @0x" + compiledNativeCode.getCodeStart().toHexString() : "Native code: " + title;
     }
 
     /**
@@ -363,13 +372,13 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
         if (codeLocation.hasAddress()) {
             final Address address = codeLocation.address();
             name.append("Target{0x").append(address.toHexString());
-            if (vm().findTeleTargetRoutine(TeleNativeTargetRoutine.class, address) != null) {
+            if (vm().codeCache().findCompiledNativeCode(address) != null) {
                 // a native routine that's already been registered.
                 name.append("}");
             } else {
-                final TeleTargetMethod teleTargetMethod = vm().makeTeleTargetMethod(address);
-                if (teleTargetMethod != null) {
-                    name.append(",  ").append(longName(teleTargetMethod, address)).append("} ");
+                final MaxCompiledMethod compiledMethod = vm().codeCache().findCompiledMethod(address);
+                if (compiledMethod != null) {
+                    name.append(",  ").append(longName(compiledMethod, address)).append("} ");
                 } else {
                     name.append("}");
                 }
@@ -530,7 +539,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     private class ArrayReferenceRenderer implements ReferenceRenderer{
         public String referenceLabelText(TeleObject teleObject) {
             final TeleArrayObject teleArrayObject = (TeleArrayObject) teleObject;
-            final ClassActor classActorForType = teleArrayObject.classActorForType();
+            final ClassActor classActorForType = teleArrayObject.classActorForObjectType();
             final String name = classActorForType.simpleName();
             final int length = teleArrayObject.getLength();
             return objectReference(null, teleArrayObject, null, name.substring(0, name.length() - 1) + length + "]");
@@ -538,7 +547,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleArrayObject teleArrayObject = (TeleArrayObject) teleObject;
-            final ClassActor classActorForType = teleArrayObject.classActorForType();
+            final ClassActor classActorForType = teleArrayObject.classActorForObjectType();
             final String name = classActorForType.name.toString();
             final int length = teleArrayObject.getLength();
             return objectReference(null, teleArrayObject, null, name.substring(0, name.length() - 1) + length + "]");
@@ -574,7 +583,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     private class TupleObjectReferenceRenderer implements ReferenceRenderer{
         public String referenceLabelText(TeleObject teleObject) {
             final TeleTupleObject teleTupleObject = (TeleTupleObject) teleObject;
-            final ClassActor classActorForType = teleTupleObject.classActorForType();
+            final ClassActor classActorForType = teleTupleObject.classActorForObjectType();
             if (classActorForType != null) {
                 return objectReference(null, teleTupleObject, null, classActorForType.simpleName());
             }
@@ -583,7 +592,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleTupleObject teleTupleObject = (TeleTupleObject) teleObject;
-            final ClassActor classActorForType = teleTupleObject.classActorForType();
+            final ClassActor classActorForType = teleTupleObject.classActorForObjectType();
             if (classActorForType != null) {
                 return objectReference(null, teleTupleObject, null, classActorForType.name.toString());
             }
@@ -595,13 +604,13 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceLabelText(TeleObject teleObject) {
             final TeleStaticTuple teleStaticTuple = (TeleStaticTuple) teleObject;
-            final ClassActor classActorForType = teleStaticTuple.classActorForType();
+            final ClassActor classActorForType = teleStaticTuple.classActorForObjectType();
             return objectReference(null, teleStaticTuple, teleStaticTuple.maxineTerseRole(), classActorForType.simpleName());
         }
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleStaticTuple teleStaticTuple = (TeleStaticTuple) teleObject;
-            final ClassActor classActorForType = teleStaticTuple.classActorForType();
+            final ClassActor classActorForType = teleStaticTuple.classActorForObjectType();
             return objectReference(null, teleStaticTuple, teleStaticTuple.maxineRole(), classActorForType.qualifiedName());
         }
     }
@@ -667,7 +676,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleString teleString = (TeleString) teleObject;
-            final ClassActor classActorForType = teleString.classActorForType();
+            final ClassActor classActorForType = teleString.classActorForObjectType();
             final String s = teleString.getString();
             return objectReference(null, teleObject, classActorForType.qualifiedName(), "\"" + s + "\"");
         }
@@ -685,7 +694,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleUtf8Constant teleUtf8Constant = (TeleUtf8Constant) teleObject;
-            final ClassActor classActorForType = teleUtf8Constant.classActorForType();
+            final ClassActor classActorForType = teleUtf8Constant.classActorForObjectType();
             final String s = teleUtf8Constant.utf8Constant().string;
             return objectReference(null, teleObject, classActorForType.qualifiedName(), "\"" + s + "\"");
         }
@@ -704,7 +713,7 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleStringConstant teleStringConstant = (TeleStringConstant) teleObject;
-            final ClassActor classActorForType = teleStringConstant.classActorForType();
+            final ClassActor classActorForType = teleStringConstant.classActorForObjectType();
             final String s = teleStringConstant.getString();
             return objectReference(null, teleObject, classActorForType.qualifiedName(), "\"" + s + "\"");
         }
@@ -792,14 +801,14 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
 
         public String referenceLabelText(TeleObject teleObject) {
             final TeleEnum teleEnum = (TeleEnum) teleObject;
-            final ClassActor classActorForType = teleEnum.classActorForType();
+            final ClassActor classActorForType = teleEnum.classActorForObjectType();
             final String name = teleEnum.toJava().name();
             return objectReference(null, teleObject, null, classActorForType.toJava().getSimpleName() + "." + name);
         }
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TeleEnum teleEnum = (TeleEnum) teleObject;
-            final ClassActor classActorForType = teleEnum.classActorForType();
+            final ClassActor classActorForType = teleEnum.classActorForObjectType();
             final String name = teleEnum.toJava().name();
             final int ordinal = teleEnum.toJava().ordinal();
             return objectReference(null, teleObject, null, classActorForType.qualifiedName() + "." + name + " ordinal=" + ordinal);
@@ -883,13 +892,13 @@ public final class InspectorNameDisplay extends AbstractInspectionHolder {
     private class PoolConstantReferenceRenderer implements ReferenceRenderer{
         public String referenceLabelText(TeleObject teleObject) {
             final TelePoolConstant telePoolConstant = (TelePoolConstant) teleObject;
-            final ClassActor classActorForType = telePoolConstant.classActorForType();
+            final ClassActor classActorForType = telePoolConstant.classActorForObjectType();
             return objectReference(null, teleObject, null, classActorForType.simpleName());
         }
 
         public String referenceToolTipText(TeleObject teleObject) {
             final TelePoolConstant telePoolConstant = (TelePoolConstant) teleObject;
-            final ClassActor classActorForType = telePoolConstant.classActorForType();
+            final ClassActor classActorForType = telePoolConstant.classActorForObjectType();
             return objectReference(null, teleObject, null, "PoolConstant: " + classActorForType.qualifiedName());
         }
     }

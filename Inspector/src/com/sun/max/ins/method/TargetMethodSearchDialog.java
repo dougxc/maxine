@@ -34,57 +34,89 @@ import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.compiler.target.*;
 
 /**
- * A dialog to let the user select a target method. The dialog has two flavors; one that shows all the
+ * A dialog to let the user select a compiled method. The dialog has two flavors; one that shows all the
  * target methods currently in the VM and one that shows all the target methods pertaining to the
  * declared methods of a specified class actor.
  *
  * @author Doug Simon
  * @author Michael Van De Vanter
  */
-public final class TargetMethodSearchDialog extends TeleObjectSearchDialog {
+public final class TargetMethodSearchDialog extends FilteredListDialog<MaxCompiledMethod> {
+
+    /**
+     * A tuple (method compilation name, method compilation).
+     */
+    private final class NamedMethodCompilation implements Comparable<NamedMethodCompilation> {
+
+        private final String name;
+
+        private final MaxCompiledMethod compiledMethod;
+
+        public NamedMethodCompilation(String name, MaxCompiledMethod compiledMethod) {
+            this.name = name;
+            this.compiledMethod = compiledMethod;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public MaxCompiledMethod compiledCode() {
+            return compiledMethod;
+        }
+
+        public int compareTo(NamedMethodCompilation o) {
+            return name.compareTo(o.name);
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
 
     @Override
-    protected TeleObject convertSelectedItem(Object listItem) {
-        return ((NamedTeleObject) listItem).teleObject();
+    protected MaxCompiledMethod convertSelectedItem(Object listItem) {
+        return ((NamedMethodCompilation) listItem).compiledCode();
     }
 
     @Override
     protected void rebuildList(String filterText) {
         final String filterLowerCase = filterText.toLowerCase();
-        final List<NamedTeleObject> namedTeleTargetMethods = new ArrayList<NamedTeleObject>();
+        final List<NamedMethodCompilation> namedTeleTargetMethods = new ArrayList<NamedMethodCompilation>();
 
         if (teleClassActor != null) {
             for (TeleClassMethodActor teleClassMethodActor : teleClassActor.getTeleClassMethodActors()) {
-                if (teleClassMethodActor.getCurrentJavaTargetMethod() != null) {
+                if (teleClassMethodActor.getCurrentCompilation() != null) {
                     final MethodActor methodActor = teleClassMethodActor.methodActor();
                     final String methodNameLowerCase = methodActor.name.toString().toLowerCase();
                     if (filterLowerCase.isEmpty() ||
                                     (filterLowerCase.endsWith(" ") && methodNameLowerCase.equals(Strings.chopSuffix(filterLowerCase, 1))) ||
                                     methodNameLowerCase.contains(filterLowerCase)) {
-                        for (TeleTargetMethod teleTargetMethod : teleClassMethodActor.targetMethods()) {
-                            final String name = inspection().nameDisplay().shortName(teleTargetMethod, ReturnTypeSpecification.AS_SUFFIX);
-                            namedTeleTargetMethods.add(new NamedTeleObject(name, teleTargetMethod));
+                        for (MaxCompiledMethod compiledMethod : vm().codeCache().compilations(teleClassMethodActor)) {
+                            final String name = inspection().nameDisplay().shortName(compiledMethod, ReturnTypeSpecification.AS_SUFFIX);
+                            namedTeleTargetMethods.add(new NamedMethodCompilation(name, compiledMethod));
                         }
                     }
                 }
             }
         } else {
             for (MaxCompiledCodeRegion teleCompiledCodeRegion : inspection().vm().codeCache().compiledCodeRegions()) {
-                for (TeleTargetMethod teleTargetMethod : teleCompiledCodeRegion.teleTargetMethods()) {
-                    ClassMethodActor methodActor = teleTargetMethod.classMethodActor();
-                    String targetMethodType = Classes.getSimpleName(teleTargetMethod.getTeleHub().getTeleClassActor().getName());
+                for (MaxCompiledMethod compiledMethod : teleCompiledCodeRegion.compilations()) {
+                    ClassMethodActor methodActor = compiledMethod.classMethodActor();
+                    String targetMethodType = Classes.getSimpleName(compiledMethod.teleTargetMethod().getTeleHub().getTeleClassActor().getName());
                     if (methodActor != null) {
                         final String textToMatch = methodActor.format("%h.%n " + targetMethodType).toLowerCase();
                         if (filterLowerCase.isEmpty() ||
                             (filterLowerCase.endsWith(" ") && textToMatch.equals(Strings.chopSuffix(filterLowerCase, 1))) ||
                              textToMatch.contains(filterLowerCase)) {
                             final String name = methodActor.format("%h.%n(%p) [" + targetMethodType + "]");
-                            namedTeleTargetMethods.add(new NamedTeleObject(name, teleTargetMethod));
+                            namedTeleTargetMethods.add(new NamedMethodCompilation(name, compiledMethod));
                         }
                     } else {
-                        String regionName = teleTargetMethod.getRegionName();
+                        String regionName = compiledMethod.entityName();
                         if (filterLowerCase.isEmpty() || (regionName + " " + targetMethodType).toLowerCase().contains(filterLowerCase)) {
-                            namedTeleTargetMethods.add(new NamedTeleObject(regionName + " [" + targetMethodType + "]", teleTargetMethod));
+                            namedTeleTargetMethods.add(new NamedMethodCompilation(regionName + " [" + targetMethodType + "]", compiledMethod));
                         }
                     }
                 }
@@ -92,8 +124,8 @@ public final class TargetMethodSearchDialog extends TeleObjectSearchDialog {
         }
 
         Collections.sort(namedTeleTargetMethods);
-        for (NamedTeleObject namedTeleObject : namedTeleTargetMethods) {
-            listModel.addElement(namedTeleObject);
+        for (NamedMethodCompilation namedMethodCompilation : namedTeleTargetMethods) {
+            listModel.addElement(namedMethodCompilation);
         }
     }
 
@@ -119,18 +151,24 @@ public final class TargetMethodSearchDialog extends TeleObjectSearchDialog {
      * @param multi allow multiple selections if true
      * @return references to the selected {@link TargetMethod}s in the tele VM, null if user canceled.
      */
-    public static Sequence<TeleTargetMethod> show(Inspection inspection, TeleClassActor teleClassActor, String title, String actionName, boolean multi) {
+    public static Sequence<MaxCompiledMethod> show(Inspection inspection, TeleClassActor teleClassActor, String title, String actionName, boolean multi) {
         final TargetMethodSearchDialog dialog = new TargetMethodSearchDialog(inspection, teleClassActor, title, actionName, multi);
         dialog.setVisible(true);
-        final Sequence<TeleObject> teleObjects = dialog.selectedObjects();
-        if (teleObjects != null) {
-            final AppendableSequence<TeleTargetMethod> teleTargetMethods = new LinkSequence<TeleTargetMethod>();
-            for (TeleObject teleObject : teleObjects) {
-                final TeleTargetMethod teleTargetMethod = (TeleTargetMethod) teleObject;
-                teleTargetMethods.append(teleTargetMethod);
-            }
-            return teleTargetMethods;
-        }
+        return dialog.selectedObjects();
+//        final Sequence<MaxCompiledCode> teleObjects = dialog.selectedObjects();
+//        if (teleObjects != null) {
+//            final AppendableSequence<TeleTargetMethod> teleTargetMethods = new LinkSequence<TeleTargetMethod>();
+//            for (MaxCompiledCode teleObject : teleObjects) {
+//                final TeleTargetMethod teleTargetMethod = (TeleTargetMethod) teleObject;
+//                teleTargetMethods.append(teleTargetMethod);
+//            }
+//            return teleTargetMethods;
+//        }
+//        return null;
+    }
+
+    @Override
+    protected MaxCompiledMethod noSelectedObject() {
         return null;
     }
 

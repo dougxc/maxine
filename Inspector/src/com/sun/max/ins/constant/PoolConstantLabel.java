@@ -370,7 +370,14 @@ public abstract class PoolConstantLabel extends InspectorLabel {
         protected void handleLeftButtonEvent() {
             checkResolved();
             if (teleClassMethodActor != null && teleClassMethodActor.hasCodeAttribute()) {
-                focus().setCodeLocation(teleClassMethodActor.entryLocation());
+                final TeleTargetMethod teleTargetMethod = teleClassMethodActor.getCurrentCompilation();
+                if (teleTargetMethod != null) {
+                    final MaxCompiledMethod compiledMethod =
+                        vm().codeCache().findCompiledMethod(teleTargetMethod.callEntryPoint());
+                    if (compiledMethod != null) {
+                        focus().setCodeLocation(compiledMethod.getCallEntryLocation());
+                    }
+                }
             }
         }
     }

@@ -35,28 +35,22 @@ import com.sun.max.tele.object.*;
  */
 public final class NativeMethodInspector extends MethodInspector {
 
-    private final TeleTargetRoutine teleTargetRoutine;
+    private final MaxCompiledNativeCode compiledNativeCode;
     private TargetCodeViewer targetCodeViewer = null;
     private final String shortName;
     private final String longName;
 
-    public NativeMethodInspector(Inspection inspection, MethodInspectorContainer parent, TeleTargetRoutine teleTargetRoutine) {
+    public NativeMethodInspector(Inspection inspection, MethodInspectorContainer parent, MaxCompiledNativeCode compiledNativeCode) {
         super(inspection, parent);
-        this.teleTargetRoutine = teleTargetRoutine;
-        if (teleTargetRoutine instanceof TeleNativeTargetRoutine) {
-            final TeleNativeTargetRoutine teleNativeTargetRoutine  = (TeleNativeTargetRoutine) teleTargetRoutine;
-            shortName = inspection().nameDisplay().shortName(teleNativeTargetRoutine);
-            longName = inspection().nameDisplay().longName(teleNativeTargetRoutine);
-        } else {
-            shortName = teleTargetRoutine.getName();
-            longName = shortName;
-        }
+        this.compiledNativeCode = compiledNativeCode;
+        shortName = inspection().nameDisplay().shortName(compiledNativeCode);
+        longName = inspection().nameDisplay().longName(compiledNativeCode);
         createTabFrame(parent);
     }
 
     @Override
-    public TeleTargetRoutine teleTargetRoutine() {
-        return teleTargetRoutine;
+    public MaxCompiledNativeCode maxCompiledCode() {
+        return compiledNativeCode;
     }
 
     @Override
@@ -76,7 +70,7 @@ public final class NativeMethodInspector extends MethodInspector {
 
     @Override
     public void createView() {
-        targetCodeViewer =  new JTableTargetCodeViewer(inspection(), this, teleTargetRoutine);
+        targetCodeViewer =  new JTableTargetCodeViewer(inspection(), this, compiledNativeCode);
         getContentPane().add(targetCodeViewer);
         pack();
     }
