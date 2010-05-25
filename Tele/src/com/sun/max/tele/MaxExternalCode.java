@@ -18,42 +18,19 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package com.sun.max.tele.method;
+package com.sun.max.tele;
 
-import com.sun.max.tele.*;
-import com.sun.max.tele.memory.*;
 import com.sun.max.unsafe.*;
 
+
 /**
- * Represents a region of VM memory that holds compiled code.
+ * Data describing a single block of external machine code representing a native routine
+ * about which little is known.
  *
  * @author Michael Van De Vanter
-  */
-public abstract class TargetCodeRegion extends TeleFixedMemoryRegion {
+ */
+public interface MaxExternalCode extends MaxMachineCode<MaxExternalCode> {
 
-    private final TeleTargetRoutine teleTargetRoutine;
-
-    public TargetCodeRegion(TeleVM teleVM, TeleTargetRoutine teleTargetRoutine, Address start, Size size, String description) {
-        super(teleVM, description, start, size);
-        this.teleTargetRoutine = teleTargetRoutine;
-    }
-
-    public TeleTargetRoutine teleTargetRoutine() {
-        return teleTargetRoutine;
-    }
-
-    /**
-     * Does this region of compiled code contain a particular location.
-     * Always false if the location is not a compiled location.
-     *
-     * @param codeLocation location of a code instruction in the VM
-     * @return whether the code instruction is a target instruction in this region
-     */
-    public boolean contains(MaxCodeLocation codeLocation) {
-        if (codeLocation.hasAddress()) {
-            return contains(codeLocation.address());
-        }
-        return false;
-    }
+    Size DEFAULT_NATIVE_CODE_LENGTH = Size.fromInt(200);
 
 }
