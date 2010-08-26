@@ -309,8 +309,8 @@ public abstract class TeleVM implements MaxVM {
     }
 
     /**
-     * Create the correctr instance of {@link TeleChannelProtocol} based on {@link #targetLocation} and
-     * {@link PperatingSystem}.
+     * Create the correct instance of {@link TeleChannelProtocol} based on {@link #targetLocation} and
+     * {@link OperatingSystem}.
      *
      * @param operatingSystem
      */
