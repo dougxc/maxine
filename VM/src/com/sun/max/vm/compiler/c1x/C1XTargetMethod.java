@@ -21,7 +21,7 @@
 package com.sun.max.vm.compiler.c1x;
 
 import static com.sun.max.platform.Platform.*;
-import static com.sun.max.vm.compiler.c1x.C1XCompilerScheme.*;
+import static com.sun.max.vm.MaxineVM.*;
 import static com.sun.max.vm.stack.amd64.AMD64OptStackWalking.*;
 
 import java.io.*;
@@ -48,7 +48,6 @@ import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.compiler.target.amd64.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.runtime.*;
-import com.sun.max.vm.runtime.amd64.*;
 import com.sun.max.vm.stack.*;
 import com.sun.max.vm.stack.StackFrameWalker.Cursor;
 import com.sun.max.vm.stack.amd64.*;
@@ -118,8 +117,8 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
         }
     }
 
-    public C1XTargetMethod(String stubName, CiTargetMethod ciTargetMethod) {
-        super(stubName, CallEntryPoint.OPTIMIZED_ENTRY_POINT);
+    public C1XTargetMethod(Flavor flavor, String stubName, CiTargetMethod ciTargetMethod) {
+        super(flavor, stubName, CallEntryPoint.OPTIMIZED_ENTRY_POINT);
         init(ciTargetMethod);
 
         if (printTargetMethods.getValue() != null) {
@@ -166,27 +165,6 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
         } catch (CloneNotSupportedException e) {
             throw FatalError.unexpected(null, e);
         }
-    }
-
-    /**
-     * Gets the register config used to compile this method.
-     */
-    @Override
-    public RiRegisterConfig getRegisterConfig() {
-        if (classMethodActor != null) {
-            return C1XCompilerScheme.getRegisterConfig(classMethodActor);
-        }
-        // This must be a global stub
-        return C1XCompilerScheme.getGlobalStubRegisterConfig();
-    }
-
-    @Override
-    public Pointer getCalleeSaveStart(Pointer sp) {
-        CiCalleeSaveArea csa = getRegisterConfig().getCalleeSaveArea();
-        if (csa.size == 0) {
-            return Pointer.zero();
-        }
-        return sp.plus(C1XCompilerScheme.offsetOfCSAInFrame(frameSize(), csa));
     }
 
     @Override
@@ -370,7 +348,7 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
 
             RiMethod riMethod = site.method;
             if (riMethod != null) {
-                final ClassMethodActor cma = getClassMethodActor(riMethod);
+                final ClassMethodActor cma = (ClassMethodActor) riMethod;
                 assert cma != null : "unresolved direct call!";
                 directCallees[index] = cma;
             } else if (site.runtimeCall != null) {
@@ -400,10 +378,6 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
 
         setStopPositions(stopPositions, directCallees, numberOfIndirectCalls, numberOfSafepoints);
         initSourceInfo(debugInfos, hasInlinedMethods);
-    }
-
-    private ClassMethodActor getClassMethodActor(RiMethod riMethod) {
-        return (ClassMethodActor) riMethod;
     }
 
     private boolean initStopPosition(int index, int refmapIndex, int[] stopPositions, int codePos, CiDebugInfo debugInfo, CiDebugInfo[] debugInfos) {
@@ -519,7 +493,7 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
         // (if this entry is an inlined method)
         int start = index * 3;
 
-        ClassMethodActor cma = getClassMethodActor(curPos.method);
+        ClassMethodActor cma = (ClassMethodActor) curPos.method;
         Integer methodIndex = inlinedMethodMap.get(cma);
         if (methodIndex == null) {
             methodIndex = inlinedMethodList.size();
@@ -715,24 +689,23 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
         CiCalleeSaveArea csa = null;
         switch (calleeKind) {
             case TRAMPOLINE:
-                RiRegisterConfig registerConfig = callee.targetMethod().getRegisterConfig();
                 if (callee.targetMethod() instanceof C1XTargetMethod) {
-                    C1XTargetMethod c1xCallee = (C1XTargetMethod) callee.targetMethod();
                     if (C1X_GENERATES_REG_REF_MAPS_AT_CALL_SITES) {
                         // can simply use the register ref map at the call site
+                        RiRegisterConfig registerConfig = vm().registerConfigs.trampoline;
                         csa = registerConfig.getCalleeSaveArea();
-                        registerState = callee.sp().plus(offsetOfCSAInFrame(c1xCallee.frameSize(), csa));
+                        registerState = callee.sp();
                     } else {
-                        prepareTrampolineRefMap(current, callee, preparer, registerConfig);
+                        prepareTrampolineRefMap(current, callee, preparer);
                     }
                 } else {
                     // compute the register reference map from the call at this site
-                    prepareTrampolineRefMap(current, callee, preparer, registerConfig);
+                    prepareTrampolineRefMap(current, callee, preparer);
                 }
                 break;
             case TRAP_STUB:  // fall through
                 // get the register state from the callee's frame
-                registerState = callee.sp().plus(callee.targetMethod().frameSize()).minus(AMD64TrapStateAccess.TRAP_STATE_SIZE_WITHOUT_RIP);
+                registerState = callee.sp();
                 if (Trap.Number.isStackOverflow(registerState)) {
                     // a method can never catch stack overflow for itself
                     return;
@@ -743,10 +716,10 @@ public class C1XTargetMethod extends TargetMethod implements Cloneable {
                     // can simply use the register ref map at the call site
                     C1XTargetMethod c1xCallee = (C1XTargetMethod) callee.targetMethod();
                     csa = c1xCallee.getRegisterConfig().getCalleeSaveArea();
-                    registerState = callee.sp().plus(offsetOfCSAInFrame(c1xCallee.frameSize(), csa));
+                    registerState = callee.sp();
                 } else {
                     // get the register state from the callee's frame
-                    registerState = callee.sp().plus(callee.targetMethod().frameSize()).minus(AMD64TrapStateAccess.TRAP_STATE_SIZE_WITHOUT_RIP);
+                    registerState = callee.sp();
                 }
                 break;
             case NATIVE:

@@ -113,7 +113,7 @@ public final class AMD64TargetMethodUtil {
         FatalError.check((int) displacement == displacement, "Code displacement out of 32-bit range");
         displacement = displacement & 0xFFFFFFFFL;
         callSite.writeInt(1,  (int) displacement);
-        // FIXME: Needs to invalid ICache to be correct (requires new CPS builtin)
+        // FIXME: Needs to invalid ICache to be correct (requires new builtin/intrisinc)
     }
 
     // Disable instance creation.

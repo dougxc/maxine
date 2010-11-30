@@ -26,7 +26,7 @@ import static com.sun.max.vm.VMConfiguration.*;
 import java.io.*;
 import java.lang.reflect.*;
 import java.nio.*;
-import java.nio.channels.FileChannel.*;
+import java.nio.channels.FileChannel.MapMode;
 import java.util.*;
 
 import com.sun.max.*;
@@ -43,7 +43,7 @@ import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.classfile.constant.*;
 import com.sun.max.vm.compiler.*;
-import com.sun.max.vm.compiler.CompilationScheme.*;
+import com.sun.max.vm.compiler.CompilationScheme.Static;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.tele.*;
 import com.sun.max.vm.thread.*;
@@ -424,8 +424,6 @@ public class BootImage {
         public final String compilerPackageName;
         public final String compilationPackageName;
         public final String jitPackageName;
-        public final String trampolinePackageName;
-        public final String targetABIsPackageName;
         public final String runPackageName;
 
         public BuildLevel buildLevel() {
@@ -475,14 +473,6 @@ public class BootImage {
             return (VMPackage) MaxPackage.fromName(jitPackageName);
         }
 
-        public VMPackage trampolinePackage() {
-            return (VMPackage) MaxPackage.fromName(trampolinePackageName);
-        }
-
-        public VMPackage targetABIsPackage() {
-            return (VMPackage) MaxPackage.fromName(targetABIsPackageName);
-        }
-
         public VMPackage runPackage() {
             return (VMPackage) MaxPackage.fromName(runPackageName);
         }
@@ -501,8 +491,6 @@ public class BootImage {
             compilerPackageName = Utf8.readString(inputStream);
             compilationPackageName = Utf8.readString(inputStream);
             jitPackageName =  Utf8.readString(inputStream);
-            trampolinePackageName = Utf8.readString(inputStream);
-            targetABIsPackageName = Utf8.readString(inputStream);
             runPackageName = Utf8.readString(inputStream);
         }
 
@@ -525,9 +513,6 @@ public class BootImage {
             } else {
                 jitPackageName = vmConfiguration.jitCompilerPackage.name();
             }
-
-            trampolinePackageName = vmConfiguration.trampolinePackage.name();
-            targetABIsPackageName = vmConfiguration.targetABIsPackage.name();
             runPackageName = vmConfiguration.runPackage.name();
         }
 
@@ -547,8 +532,6 @@ public class BootImage {
             checkPackage(monitorPackageName);
             checkPackage(compilerPackageName);
             checkPackage(jitPackageName);
-            checkPackage(trampolinePackageName);
-            checkPackage(targetABIsPackageName);
             checkPackage(runPackageName);
         }
 
@@ -681,8 +664,7 @@ public class BootImage {
                                                       stringInfo.jitPackage(),
                                                       null,
                                                       stringInfo.compilationPackage(),
-                                                      stringInfo.trampolinePackage(),
-                                                      stringInfo.targetABIsPackage(), stringInfo.runPackage());
+                                                      stringInfo.runPackage());
 
                 fileInputStream.skip(header.heapSize + header.codeSize);
                 int trailerOffset = codeOffset() + header.codeSize;

@@ -21,6 +21,8 @@
 package com.sun.max.vm.compiler.c1x;
 
 import static com.sun.cri.bytecode.Bytecodes.*;
+import static com.sun.max.vm.MaxineVM.*;
+import static com.sun.max.vm.compiler.target.TargetMethod.Flavor.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -305,7 +307,7 @@ public class MaxRiRuntime implements RiRuntime {
     }
 
     public Object registerGlobalStub(CiTargetMethod ciTargetMethod, String name) {
-        return new C1XTargetMethod(name, ciTargetMethod);
+        return new C1XTargetMethod(GlobalStub, name, ciTargetMethod);
     }
 
     public RiType getRiType(Class<?> javaClass) {
@@ -340,6 +342,6 @@ public class MaxRiRuntime implements RiRuntime {
     }
 
     public RiRegisterConfig getRegisterConfig(RiMethod method) {
-        return C1XCompilerScheme.getRegisterConfig((ClassMethodActor) method);
+        return vm().registerConfigs.getRegisterConfig((ClassMethodActor) method);
     }
 }

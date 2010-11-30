@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007 Sun Microsystems, Inc.  All rights reserved.
+ * Copyright (c) 2009 Sun Microsystems, Inc.  All rights reserved.
  *
  * Sun Microsystems, Inc. has intellectual property rights relating to technology embodied in the product
  * that is described in this document. In particular, and without limitation, these intellectual property
@@ -18,24 +18,19 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package com.sun.max.vm.compiler.target.sparc.systemV;
+package com.sun.max.vm.compiler.c1x;
 
-import com.sun.max.*;
 import com.sun.max.vm.*;
-import com.sun.max.vm.compiler.target.*;
+import com.sun.max.vm.compiler.*;
 
 /**
- * @see MaxPackage
+ * The package class that describes the C1X packages to the Maxine configurator.
+ * @see com.sun.max.MaxPackage
  *
- * @author Bernd Mathiske
+ * @author Ben L. Titzer
  */
 public class Package extends VMPackage {
     public Package() {
-        registerScheme(TargetABIsScheme.class, SPARCSystemVTargetABIsScheme.class);
-    }
-
-    @Override
-    public boolean isPartOfMaxineVM(VMConfiguration vmConfiguration) {
-        return vmConfiguration.targetABIsPackage == this;
+        registerScheme(RuntimeCompilerScheme.class, C1XCompilerScheme.class);
     }
 }
