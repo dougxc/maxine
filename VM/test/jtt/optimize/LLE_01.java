@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007 Sun Microsystems, Inc.  All rights reserved.
+ * Copyright (c) 2009 Sun Microsystems, Inc.  All rights reserved.
  *
  * Sun Microsystems, Inc. has intellectual property rights relating to technology embodied in the product
  * that is described in this document. In particular, and without limitation, these intellectual property
@@ -18,22 +18,23 @@
  * UNIX is a registered trademark in the U.S. and other countries, exclusively licensed through X/Open
  * Company, Ltd.
  */
-package jtt.bytecode;
+package jtt.optimize;
 
 /*
+ * Test case for local load elimination. It makes sure that the second field store is not eliminated, because
+ * it is recognized that the first store changes the field "field1", so it is no longer guaranteed that it
+ * has its default value 0.
  * @Harness: java
- * @Runs: (0.0d, 1.0d, 0) = -0.0d; (-1.01d, -2.01d, 0) = 1.01d; (7263.8734d, 8263.8734d, 0) = -7263.8734d; (0.0d, 1.0d, 1) = -1.0d; (-1.01d, -2.01d, 1) = 2.01d; (7263.8734d, 8263.8734d, 1) = -8263.8734d
+ * @Runs: 0=0
  */
-public class BC_dneg {
-    public static double test(double a, double b, int which) {
-        double result1 = -a;
-        double result2 = -b;
-        double result = 0.0;
-        if (which == 0) {
-            result = result1;
-        } else {
-            result = result2;
-        }
-        return result;
+public class LLE_01 {
+
+    int field1;
+
+    public static int test(int arg) {
+        LLE_01 o = new LLE_01();
+        o.field1 = 1;
+        o.field1 = 0;
+        return o.field1;
     }
 }
