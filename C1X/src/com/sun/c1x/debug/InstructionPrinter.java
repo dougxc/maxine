@@ -383,6 +383,8 @@ public class InstructionPrinter extends ValueVisitor {
     public void visitCheckCast(CheckCast checkcast) {
         out.print("checkcast(").
              print(checkcast.object()).
+             print(",").
+             print(checkcast.targetClassInstruction()).
              print(") ").
              print(nameOf(checkcast.targetClass()));
     }

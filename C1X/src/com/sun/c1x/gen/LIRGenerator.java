@@ -480,12 +480,6 @@ public abstract class LIRGenerator extends ValueVisitor {
                 visitRegisterFinalizer(x);
                 break;
 
-            case java_lang_Object$getClass:
-                throw Util.unimplemented();
-
-            case java_lang_Thread$currentThread:
-                throw Util.unimplemented();
-
             case java_lang_Math$log:   // fall through
             case java_lang_Math$log10: // fall through
             case java_lang_Math$abs:   // fall through
@@ -495,11 +489,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             case java_lang_Math$cos:
                 genMathIntrinsic(x);
                 break;
-            case java_lang_System$arraycopy:
-                throw Util.unimplemented();
-
-            case java_nio_Buffer$checkIndex:
-                throw Util.unimplemented();
 
             case sun_misc_Unsafe$compareAndSwapObject:
                 genCompareAndSwap(x, CiKind.Object);
@@ -512,7 +501,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 break;
 
             default:
-                Util.shouldNotReachHere();
+                Util.shouldNotReachHere("Unknown intrinsic: " + x.intrinsic());
                 break;
         }
     }
@@ -1766,6 +1755,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected void postGCWriteBarrier(CiValue addr, CiValue newVal) {
+       XirSnippet writeBarrier = xir.genWriteBarrier(XirArgument.forObject(addr));
+       if (writeBarrier != null) {
+           emitXir(writeBarrier, null, null, null, false);
+       }
     }
 
     protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {

@@ -161,9 +161,9 @@ public final class GraphBuilder {
         // 5.
         C1XIntrinsic intrinsic = C1XOptions.OptIntrinsify ? C1XIntrinsic.getIntrinsic(rootMethod) : null;
         if (intrinsic != null) {
+            lastInstr = stdEntry;
             // 6A.1 the root method is an intrinsic; load the parameters onto the stack and try to inline it
-            lastInstr = curBlock;
-            if (C1XOptions.OptIntrinsify) {
+            if (C1XOptions.OptIntrinsify && osrEntry == null) {
                 // try to inline an Intrinsic node
                 boolean isStatic = Modifier.isStatic(rootMethod.accessFlags());
                 int argsSize = rootMethod.signature().argumentSlots(!isStatic);
@@ -173,14 +173,14 @@ public final class GraphBuilder {
                 }
                 if (tryInlineIntrinsic(rootMethod, args, isStatic, intrinsic)) {
                     // intrinsic inlining succeeded, add the return node
-                    CiKind rt = returnKind(rootMethod);
+                    CiKind rt = returnKind(rootMethod).stackKind();
                     Value result = null;
                     if (rt != CiKind.Void) {
                         result = pop(rt);
                     }
                     genReturn(result);
                     BlockEnd end = (BlockEnd) lastInstr;
-                    curBlock.setEnd(end);
+                    stdEntry.setEnd(end);
                     end.setStateAfter(curState.immutableCopy(bci()));
                 }  else {
                     // try intrinsic failed; do the normal parsing
@@ -773,9 +773,7 @@ public final class GraphBuilder {
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         CheckCast c = new CheckCast(type, typeInstruction, apop(), null);
         apush(append(c));
-        if (assumeLeafClass(type) && !type.isArrayClass()) {
-            c.setDirectCompare();
-        }
+        checkForDirectCompare(c);
     }
 
     void genInstanceOf() {
@@ -785,8 +783,16 @@ public final class GraphBuilder {
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         InstanceOf i = new InstanceOf(type, typeInstruction, apop(), null);
         ipush(append(i));
-        if (assumeLeafClass(type) && !type.isArrayClass()) {
-            i.setDirectCompare();
+        checkForDirectCompare(i);
+    }
+
+    private void checkForDirectCompare(TypeCheck check) {
+        RiType type = check.targetClass();
+        if (!type.isResolved() || type.isArrayClass()) {
+            return;
+        }
+        if (assumeLeafClass(type)) {
+            check.setDirectCompare();
         }
     }
 
@@ -1052,14 +1058,21 @@ public final class GraphBuilder {
             // 2. check if an assumed leaf method can be found
             RiMethod leaf = getAssumedLeafMethod(target, receiver);
             if (leaf != null && leaf.isResolved() && !isAbstract(leaf.accessFlags()) && leaf.holder().isResolved()) {
+                if (C1XOptions.PrintAssumptions) {
+                    TTY.println("Optimistic invoke direct because of leaf method to " + leaf);
+                }
                 invokeDirect(leaf, args, null, cpi, constantPool);
                 return;
             }
             // 3. check if the either of the holder or declared type of receiver can be assumed to be a leaf
             exact = getAssumedLeafType(klass, receiver);
             if (exact != null && exact.isResolved()) {
+                RiMethod targetMethod = exact.resolveMethodImpl(target);
+                if (C1XOptions.PrintAssumptions) {
+                    TTY.println("Optimistic invoke direct because of leaf type to " + targetMethod);
+                }
                 // either the holder class is exact, or the receiver object has an exact type
-                invokeDirect(exact.resolveMethodImpl(target), args, exact, cpi, constantPool);
+                invokeDirect(targetMethod, args, exact, cpi, constantPool);
                 return;
             }
         }
@@ -1106,29 +1119,49 @@ public final class GraphBuilder {
         return exact;
     }
 
+    private RiType getAssumedLeafType(RiType type) {
+        if (isFinal(type.accessFlags())) {
+            return type;
+        }
+        RiType assumed = null;
+        if (C1XOptions.UseAssumptions) {
+            assumed = type.uniqueConcreteSubtype();
+            if (assumed != null) {
+                if (C1XOptions.PrintAssumptions) {
+                    TTY.println("Recording concrete subtype assumption in context of " + type.name() + ": " + assumed.name());
+                }
+                compilation.assumptions.recordConcreteSubtype(type, assumed);
+            }
+        }
+        return assumed;
+    }
+
     private RiType getAssumedLeafType(RiType staticType, Value receiver) {
-        if (assumeLeafClass(staticType)) {
-            return staticType;
+        RiType assumed = getAssumedLeafType(staticType);
+        if (assumed != null) {
+            return assumed;
         }
         RiType declared = receiver.declaredType();
-        if (declared != null && assumeLeafClass(declared)) {
-            return declared;
+        if (declared != null && declared.isResolved()) {
+            assumed = getAssumedLeafType(declared);
+            return assumed;
         }
         return null;
     }
 
     private RiMethod getAssumedLeafMethod(RiMethod target, Value receiver) {
-        if (assumeLeafMethod(target)) {
-            return target;
+        RiMethod assumed = getAssumedLeafMethod(target);
+        if (assumed != null) {
+            return assumed;
         }
         RiType declared = receiver.declaredType();
         if (declared != null && declared.isResolved() && !declared.isInterface()) {
             RiMethod impl = declared.resolveMethodImpl(target);
-            if (impl != null && (assumeLeafMethod(impl) || assumeLeafClass(declared))) {
-                return impl;
+            if (impl != null) {
+                assumed = getAssumedLeafMethod(impl);
             }
         }
-        return null;
+        return assumed;
     }
 
     void callRegisterFinalizer() {
@@ -1166,8 +1199,9 @@ public final class GraphBuilder {
         if (needsCheck) {
             // append a call to the registration intrinsic
             loadLocal(0, CiKind.Object);
+            FrameState stateBefore = curState.immutableCopy(bci());
             append(new Intrinsic(CiKind.Void, C1XIntrinsic.java_lang_Object$init,
-                                 null, curState.popArguments(1), false, curState.immutableCopy(bci()), true, true));
+                                 null, curState.popArguments(1), false, stateBefore, true, true));
             C1XMetrics.InlinedFinalizerChecks++;
         }
 
@@ -1410,8 +1444,15 @@ public final class GraphBuilder {
         }
 
         assert x.next() == null : "instruction should not have been appended yet";
-        assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end";
-        lastInstr = lastInstr.setNext(x, bci);
+        assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+        if (lastInstr instanceof Base) {
+            assert x instanceof Intrinsic : "may only happen when inlining intrinsics";
+            Instruction prev = lastInstr.prev(lastInstr.block());
+            prev.setNext(x, bci);
+            x.setNext(lastInstr, bci);
+        } else {
+            lastInstr = lastInstr.setNext(x, bci);
+        }
         if (++stats.nodeCount >= C1XOptions.MaximumInstructionCount) {
             // bailout if we've exceeded the maximum inlining size
             throw new CiBailout("Method and/or inlining is too large");
@@ -1571,14 +1612,54 @@ public final class GraphBuilder {
 
         // handle intrinsics differently
         switch (intrinsic) {
-            // java.lang.Object
-            case java_lang_Object$init:   // fall through
+            case java_lang_Object$init: // fall through
+            case java_lang_String$equals: // fall through
+            case java_lang_String$compareTo: // fall through
+            case java_lang_String$indexOf: // fall through
+            case java_lang_Math$max: // fall through
+            case java_lang_Math$min: // fall through
+            case java_lang_Math$atan2: // fall through
+            case java_lang_Math$pow: // fall through
+            case java_lang_Math$exp: // fall through
+            case java_nio_Buffer$checkIndex: // fall through
+            case java_lang_System$arraycopy: // fall through
+            case java_lang_System$identityHashCode: // fall through
+            case java_lang_System$currentTimeMillis: // fall through
+            case java_lang_System$nanoTime: // fall through
+            case java_lang_Object$getClass: // fall through
+            case java_lang_Object$hashCode: // fall through
+            case java_lang_Thread$currentThread: // fall through
+            case java_lang_Class$isAssignableFrom: // fall through
+            case java_lang_Class$isInstance: // fall through
+            case java_lang_Class$getModifiers: // fall through
+            case java_lang_Class$isInterface: // fall through
+            case java_lang_Class$isArray: // fall through
+            case java_lang_Class$isPrimitive: // fall through
+            case java_lang_Class$getSuperclass: // fall through
+            case java_lang_Class$getComponentType: // fall through
+            case java_lang_reflect_Array$getLength: // fall through
+            case java_lang_reflect_Array$newArray: // fall through
+            case java_lang_Double$doubleToLongBits: // fall through
+            case java_lang_Float$floatToIntBits: // fall through
+            case java_lang_Math$sin: // fall through
+            case java_lang_Math$cos: // fall through
+            case java_lang_Math$tan: // fall through
+            case java_lang_Math$log: // fall through
+            case java_lang_Math$log10: // fall through
+            case java_lang_Integer$bitCount: // fall through
+            case java_lang_Integer$reverseBytes: // fall through
+            case java_lang_Long$bitCount: // fall through
+            case java_lang_Long$reverseBytes: // fall through
             case java_lang_Object$clone:  return false;
             // TODO: preservesState and canTrap for complex intrinsics
         }
 
         // get the arguments for the intrinsic
         CiKind resultType = returnKind(target);
+
+        if (C1XOptions.PrintInlinedIntrinsics) {
+            TTY.println("Inlining intrinsic: " + intrinsic);
+        }
 
         // create the intrinsic node
         Intrinsic result = new Intrinsic(resultType.stackKind(), intrinsic, target, args, isStatic, curState.immutableCopy(bci()), preservesState, canTrap);
@@ -2650,30 +2731,42 @@ public final class GraphBuilder {
             if (isFinal(type.accessFlags())) {
                 return true;
             }
-            if (C1XOptions.UseDeopt && C1XOptions.OptCHA) {
-                if (!type.hasSubclass() && !type.isInterface()) {
-                    return compilation.recordLeafTypeAssumption(type);
+
+            if (C1XOptions.UseAssumptions) {
+                RiType assumed = type.uniqueConcreteSubtype();
+                if (assumed != null && assumed == type) {
+                    if (C1XOptions.PrintAssumptions) {
+                        TTY.println("Recording leaf class assumption for " + type.name());
+                    }
+                    compilation.assumptions.recordConcreteSubtype(type, assumed);
+                    return true;
                 }
             }
         }
         return false;
     }
 
-    boolean assumeLeafMethod(RiMethod method) {
+    RiMethod getAssumedLeafMethod(RiMethod method) {
         if (!C1XOptions.TestSlowPath && method.isResolved()) {
             if (method.isLeafMethod()) {
-                return true;
+                return method;
             }
-            if (C1XOptions.UseDeopt && C1XOptions.OptLeafMethods) {
-                if (!method.isOverridden() && !method.holder().isInterface()) {
-                    return compilation.recordLeafMethodAssumption(method);
+
+            if (C1XOptions.UseAssumptions) {
+                RiMethod assumed = method.uniqueConcreteMethod();
+                if (assumed != null) {
+                    if (C1XOptions.PrintAssumptions) {
+                        TTY.println("Recording concrete method assumption in context of " + method.holder().name() + ": " + assumed.name());
+                    }
+                    compilation.assumptions.recordConcreteMethod(method, assumed);
+                    return assumed;
                 }
             }
         }
-        return false;
+        return null;
     }
 
-    int recursiveInlineLevel(RiMethod target) {
+    private int recursiveInlineLevel(RiMethod target) {
         int rec = 0;
         IRScope scope = scope();
         while (scope != null) {
@@ -2686,7 +2779,7 @@ public final class GraphBuilder {
         return rec;
     }
 
-    RiConstantPool constantPool() {
+    private RiConstantPool constantPool() {
         return scopeData.constantPool;
     }
 }
