@@ -1109,6 +1109,16 @@ public class IRChecker extends ValueVisitor {
     }
 
     @Override
+    public void visitArrayCopy(ArrayCopy arrayCopy) {
+        throw Util.unimplemented();
+    }
+
+    @Override
+    public void visitBoundsCheck(BoundsCheck boundsCheck) {
+        throw Util.unimplemented();
+    }
+
+    @Override
     public void visitStoreRegister(StoreRegister i) {
     }
 

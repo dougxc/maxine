@@ -101,6 +101,8 @@ public class DefaultValueVisitor extends ValueVisitor {
     @Override public void visitUnsafePutObject(UnsafePutObject i) { visit(i); }
     @Override public void visitUnsafePutRaw(UnsafePutRaw i) { visit(i); }
     @Override public void visitUnsignedCompareOp(UnsignedCompareOp i) { visit(i); }
+    @Override public void visitArrayCopy(ArrayCopy i) { visit(i); }
+    @Override public void visitBoundsCheck(BoundsCheck i) { visit(i); }
    // Checkstyle: resume
 
 

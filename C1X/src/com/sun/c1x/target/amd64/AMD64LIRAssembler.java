@@ -34,6 +34,7 @@ import java.util.*;
 import com.sun.c1x.*;
 import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
+import com.sun.c1x.gen.LIRGenerator.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.FrameMap.StackBlock;
 import com.sun.c1x.lir.*;
@@ -53,7 +54,7 @@ import com.sun.cri.xir.CiXirAssembler.XirMark;
  * @author Thomas Wuerthinger
  * @author Ben L. Titzer
  */
-public class AMD64LIRAssembler extends LIRAssembler {
+public final class AMD64LIRAssembler extends LIRAssembler {
 
     private static final Object[] NO_PARAMS = new Object[0];
     private static final long NULLWORD = 0;
@@ -613,7 +614,7 @@ public class AMD64LIRAssembler extends LIRAssembler {
 
     @Override
     protected void emitCompareAndSwap(LIRCompareAndSwap op) {
-        CiAddress address = op.address();
+        CiAddress address = new CiAddress(CiKind.Object, op.address(), 0);
         CiRegister newval = op.newValue().asRegister();
         CiRegister cmpval = op.expectedValue().asRegister();
         assert cmpval == AMD64.rax : "wrong register";
@@ -743,7 +744,7 @@ public class AMD64LIRAssembler extends LIRAssembler {
     @Override
     protected void emitArithOp(LIROpcode code, CiValue left, CiValue right, CiValue dest, LIRDebugInfo info) {
         assert info == null : "should never be used :  idiv/irem and ldiv/lrem not handled by this method";
-        assert Util.archKindsEqual(left.kind, right.kind);
+        assert Util.archKindsEqual(left.kind, right.kind) || (left.kind == CiKind.Word && right.kind == CiKind.Int) : "left arch is " + left.kind + " and right arch is " +  right.kind;
         assert left.equals(dest) : "left and dest must be equal";
         CiKind kind = left.kind;
 
@@ -1122,7 +1123,7 @@ public class AMD64LIRAssembler extends LIRAssembler {
 
     @Override
     protected void emitCompare(Condition condition, CiValue opr1, CiValue opr2, LIROp2 op) {
-        assert Util.archKindsEqual(opr1.kind.stackKind(), opr2.kind.stackKind()) : "nonmatching stack kinds (" + condition + "): " + opr1.kind.stackKind() + "==" + opr2.kind.stackKind();
+        assert Util.archKindsEqual(opr1.kind.stackKind(), opr2.kind.stackKind()) || (opr1.kind == CiKind.Word && opr2.kind == CiKind.Int) : "nonmatching stack kinds (" + condition + "): " + opr1.kind.stackKind() + "==" + opr2.kind.stackKind();
         if (opr1.isRegister()) {
             CiRegister reg1 = opr1.asRegister();
             if (opr2.isRegister()) {
@@ -1645,6 +1646,20 @@ public class AMD64LIRAssembler extends LIRAssembler {
                     break;
                 }
 
+                case RepeatMoveBytes:
+                    assert operands[inst.x().index].asRegister().equals(AMD64.rsi) : "wrong input x: " + operands[inst.x().index];
+                    assert operands[inst.y().index].asRegister().equals(AMD64.rdi) : "wrong input y: " + operands[inst.y().index];
+                    assert operands[inst.z().index].asRegister().equals(AMD64.rcx) : "wrong input z: " + operands[inst.z().index];
+                    masm.repeatMoveBytes();
+                    break;
+
+                case RepeatMoveWords:
+                    assert operands[inst.x().index].asRegister().equals(AMD64.rsi) : "wrong input x: " + operands[inst.x().index];
+                    assert operands[inst.y().index].asRegister().equals(AMD64.rdi) : "wrong input y: " + operands[inst.y().index];
+                    assert operands[inst.z().index].asRegister().equals(AMD64.rcx) : "wrong input z: " + operands[inst.z().index];
+                    masm.repeatMoveWords();
+                    break;
+
                 case PointerCAS:
                     break;
 
@@ -1874,5 +1889,12 @@ public class AMD64LIRAssembler extends LIRAssembler {
         CiValue y = ops[inst.y().index];
         emitCompare(condition, x, y, null);
         masm.jcc(cflag, label);
+    }
+
+    @Override
+    public void emitDeoptizationStub(DeoptimizationStub stub) {
+        masm.bind(stub.label);
+        masm.directCall(CiRuntimeCall.Deoptimize, stub.info);
+        masm.shouldNotReachHere();
     }
 }

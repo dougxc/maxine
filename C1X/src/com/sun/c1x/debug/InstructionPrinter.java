@@ -383,6 +383,8 @@ public class InstructionPrinter extends ValueVisitor {
     public void visitCheckCast(CheckCast checkcast) {
         out.print("checkcast(").
              print(checkcast.object()).
+             print(",").
+             print(checkcast.targetClassInstruction()).
              print(") ").
              print(nameOf(checkcast.targetClass()));
     }
@@ -818,5 +820,17 @@ public class InstructionPrinter extends ValueVisitor {
     @Override
     public void visitBreakpointTrap(BreakpointTrap i) {
         out.print("breakpoint_trap");
+    }
+
+    @Override
+    public void visitArrayCopy(ArrayCopy arrayCopy) {
+        out.print("arrayCopy ").print(arrayCopy.src()).print(" ").print(arrayCopy.srcPos()).print(" ").
+        print(arrayCopy.dest()).print(" ").print(arrayCopy.destPos()).print(" ").print(arrayCopy.length());
+    }
+
+    @Override
+    public void visitBoundsCheck(BoundsCheck boundsCheck) {
+        out.print("boundsCheck ").print(boundsCheck.index()).print(" ").print(boundsCheck.length());
+
     }
 }

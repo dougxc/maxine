@@ -289,7 +289,7 @@ public abstract class CiXirAssembler {
      * arguments, respectively. Only the {@link XirOp#CallStub} and {@link XirOp#CallRuntime} instructions can have more than three arguments.
      *
      */
-    public static class XirInstruction {
+    public static final class XirInstruction {
         /**
          * The {@link CiKind kind} of values the instruction operates on.
          */
@@ -478,6 +478,14 @@ public abstract class CiXirAssembler {
          */
         PointerStoreDisp,
         /**
+         * Repeat move from {@code x} to {@code y} using {@code z} words.
+         */
+        RepeatMoveWords,
+        /**
+         * Repeat move from {@code x} to {@code y} using {@code z} words.
+         */
+        RepeatMoveBytes,
+        /**
          * TBD.
          */
         PointerCAS,
@@ -659,6 +667,14 @@ public abstract class CiXirAssembler {
 
     public void lea(XirOperand result, XirOperand pointer, XirOperand index, int disp, Scale scale) {
         append(new XirInstruction(CiKind.Word, new AddressAccessInformation(false, disp, scale), LoadEffectiveAddress, result, pointer, index));
+    }
+    
+    public void repmov(XirOperand src, XirOperand dest, XirOperand length) {
+        append(new XirInstruction(CiKind.Word, null, RepeatMoveWords, null, src, dest, length));
+    }
+    
+    public void repmovb(XirOperand src, XirOperand dest, XirOperand length) {
+        append(new XirInstruction(CiKind.Word, null, RepeatMoveBytes, null, src, dest, length));
     }
 
     public void pstore(CiKind kind, XirOperand pointer, XirOperand index, XirOperand value, int disp, Scale scale, boolean canTrap) {
