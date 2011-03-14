@@ -38,6 +38,7 @@ import com.sun.max.vm.jni.*;
 
 /**
  * @author Bernd Mathiske
+ * @author Michael Van De Vanter
  */
 public final class BytecodeFramesInspector extends Inspector {
 
@@ -163,6 +164,10 @@ public final class BytecodeFramesInspector extends Inspector {
         Trace.line(1, tracePrefix() + " closing for " + getTitle());
         inspectors.remove(key);
         super.inspectorClosing();
+    }
+
+    @Override
+    protected void refreshState(boolean force) {
     }
 
 }
