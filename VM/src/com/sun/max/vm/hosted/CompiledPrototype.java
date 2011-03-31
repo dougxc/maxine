@@ -636,6 +636,17 @@ public class CompiledPrototype extends Prototype {
         Trace.end(1, "compiling foldable methods");
     }
 
+    public void recompileInvalidatedTargetMethods() {
+        Trace.begin(1, "recompiling invalidated methods");
+        HashSet<TargetMethod> recompileSet = ClassDependencyManager.invalidTargetMethods;
+        for (TargetMethod targetMethod : recompileSet) {
+            add(targetMethod.classMethodActor, null, null);
+        }
+        compileWorklist();
+        Trace.end(1, "recompiling invalidated methods");
+
+    }
+
     public void checkRequiredImageMethods() {
         Trace.begin(1, "checking methods that must be compiled");
         final TreeSet<String> missing = new TreeSet<String>();
