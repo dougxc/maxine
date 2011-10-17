@@ -20,23 +20,21 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.cri.ci;
+package com.oracle.max.criutils;
 
-import java.util.*;
-
+import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * A implementation of {@link RiMethod} for an unresolved method.
  */
-public class CiUnresolvedMethod implements RiMethod {
+public class BaseUnresolvedMethod implements RiMethod {
 
     public final String name;
     public final RiType holder;
     public final RiSignature signature;
-    public Map<Object, Object> compilerStorage;
 
-    public CiUnresolvedMethod(RiType holder, String name, RiSignature signature) {
+    public BaseUnresolvedMethod(RiType holder, String name, RiSignature signature) {
         this.name = name;
         this.holder = holder;
         this.signature = signature;
@@ -110,10 +108,6 @@ public class CiUnresolvedMethod implements RiMethod {
         throw unresolved("minimalDebugInfo()");
     }
 
-    public RiMethodProfile methodData() {
-        throw unresolved("methodData()");
-    }
-
     public CiBitMap[] livenessMap() {
         throw unresolved("livenessMap()");
     }
@@ -147,45 +141,5 @@ public class CiUnresolvedMethod implements RiMethod {
     @Override
     public String toString() {
         return CiUtil.format("%H.%n(%p) [unresolved]", this);
-    }
-
-    public RiType accessor() {
-        return null;
-    }
-
-    public String intrinsic() {
-        return null;
-    }
-
-    public int invocationCount() {
-        return -1;
-    }
-
-    public int exceptionProbability(int bci) {
-        return -1;
-    }
-
-    public RiTypeProfile typeProfile(int bci) {
-        return null;
-    }
-
-    public double branchProbability(int bci) {
-        return -1;
-    }
-
-    public double[] switchProbability(int bci) {
-        return null;
-    }
-
-    public Map<Object, Object> compilerStorage() {
-        if (compilerStorage == null) {
-            compilerStorage = new HashMap<Object, Object>();
-        }
-        return compilerStorage;
-    }
-
-    @Override
-    public int compiledCodeSize() {
-        return -1;
     }
 }

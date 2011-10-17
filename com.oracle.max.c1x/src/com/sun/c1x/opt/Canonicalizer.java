@@ -42,12 +42,12 @@ import com.sun.cri.ri.*;
 public class Canonicalizer extends DefaultValueVisitor {
 
     final RiRuntime runtime;
-    final RiMethod method;
+    final RiResolvedMethod method;
     final CiTarget target;
     Value canonical;
     List<Instruction> extra;
 
-    public Canonicalizer(RiRuntime runtime, RiMethod method, CiTarget target) {
+    public Canonicalizer(RiRuntime runtime, RiResolvedMethod method, CiTarget target) {
         this.runtime = runtime;
         this.method = method;
         this.target = target;
@@ -604,7 +604,7 @@ public class Canonicalizer extends DefaultValueVisitor {
         }
         if (i.isStatic()) {
             RiField field = i.field();
-            CiConstant value = field.constantValue(null);
+            CiConstant value = ((RiResolvedField) field).constantValue(null);
             if (value != null) {
                 if (method.isClassInitializer()) {
                     // don't do canonicalization in the <clinit> method
@@ -615,7 +615,7 @@ public class Canonicalizer extends DefaultValueVisitor {
         } else {
             RiField field = i.field();
             if (i.object().isConstant()) {
-                CiConstant value = field.constantValue(i.object().asConstant());
+                CiConstant value = ((RiResolvedField) field).constantValue(i.object().asConstant());
                 if (value != null) {
                     canonical = new Constant(field.kind(false), value);
                 }
@@ -912,9 +912,9 @@ public class Canonicalizer extends DefaultValueVisitor {
     public void visitInvoke(Invoke i) {
         if (C1XOptions.CanonicalizeFoldableMethods) {
             RiMethod method = i.target();
-            if (method.isResolved()) {
+            if (method instanceof RiResolvedMethod) {
                 // only try to fold resolved method invocations
-                CiConstant result = foldInvocation(runtime, i.target(), i.arguments());
+                CiConstant result = foldInvocation(runtime, (RiResolvedMethod) method, i.arguments());
                 if (result != null) {
                     // folding was successful
                     setCanonical(new Constant(method.signature().returnKind(false), result));
@@ -1455,29 +1455,23 @@ public class Canonicalizer extends DefaultValueVisitor {
         return args[index].asConstant().asLong();
     }
 
-    public static CiConstant foldInvocation(RiRuntime runtime, RiMethod method, final Value[] args) {
-        CiConstant result = runtime.invoke(method, new CiMethodInvokeArguments() {
-            int i;
-            @Override
-            public CiConstant nextArg() {
-                if (i >= args.length) {
-                    return null;
+    public static CiConstant foldInvocation(RiRuntime runtime, RiResolvedMethod method, final Value[] args) {
+        if (runtime.isFoldable(method)) {
+            int length = method.signature().argumentCount(!Modifier.isStatic(method.accessFlags()));
+            CiConstant[] constantArgs = new CiConstant[length];
+            int z = 0;
+            for (int i = 0; i < args.length; ++i) {
+                if (args[i] != null) {
+                    constantArgs[z++] = args[i].asConstant();
                 }
-                Value arg = args[i++];
-                if (arg == null) {
-                    if (i >= args.length) {
-                        return null;
-                    }
-                    arg = args[i++];
-                    assert arg != null;
-                }
-                return arg.isConstant() ? arg.asConstant() : null;
             }
-        });
-        if (result != null) {
-            C1XMetrics.MethodsFolded++;
+            CiConstant result = runtime.fold(method, constantArgs);
+            if (result != null) {
+                C1XMetrics.MethodsFolded++;
+            }
+            return result;
         }
-        return result;
+        return null;
     }
 
     @Override

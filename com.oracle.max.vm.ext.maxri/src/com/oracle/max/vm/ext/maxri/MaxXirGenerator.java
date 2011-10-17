@@ -284,8 +284,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     }
 
     @Override
-    public XirSnippet genPrologue(XirSite site, RiMethod method) {
-        assert method.isResolved() : "Cannot generate prologue for unresolved method: " + method;
+    public XirSnippet genPrologue(XirSite site, RiResolvedMethod method) {
         ClassMethodActor callee = (ClassMethodActor) method;
 
         if (callee.isTemplate()) {
@@ -321,7 +320,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     }
 
     @Override
-    public XirSnippet genEpilogue(XirSite site, RiMethod method) {
+    public XirSnippet genEpilogue(XirSite site, RiResolvedMethod method) {
         ClassMethodActor callee = (ClassMethodActor) method;
         if (callee.isTemplate()) {
             return null;
@@ -342,7 +341,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genInvokeInterface(XirSite site, XirArgument receiver, RiMethod method) {
         XirPair pair = invokeInterfaceTemplates;
-        if (method.isResolved()) {
+        if (method instanceof RiResolvedMethod) {
             InterfaceMethodActor methodActor = (InterfaceMethodActor) method;
             XirArgument interfaceID = XirArgument.forInt(methodActor.holder().id);
             XirArgument methodIndex = XirArgument.forInt(methodActor.iIndexInInterface());
@@ -355,7 +354,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method) {
         XirPair pair = invokeVirtualTemplates;
-        if (method.isResolved()) {
+        if (method instanceof RiResolvedMethod) {
             VirtualMethodActor methodActor = (VirtualMethodActor) method;
             XirArgument vtableOffset = XirArgument.forInt(methodActor.vTableIndex() * Word.size() + offsetOfFirstArrayElement());
             return new XirSnippet(pair.resolved, receiver, vtableOffset);
@@ -366,7 +365,7 @@ public class MaxXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genInvokeSpecial(XirSite site, XirArgument receiver, RiMethod method) {
-        if (method.isResolved()) {
+        if (method instanceof RiResolvedMethod) {
             if (site.requiresNullCheck()) {
                 return new XirSnippet(invokeSpecialTemplates.resolved, WordUtil.argument(Word.zero()), receiver);
             }
@@ -379,7 +378,7 @@ public class MaxXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genInvokeStatic(XirSite site, RiMethod method) {
-        if (method.isResolved()) {
+        if (method instanceof RiResolvedMethod) {
             //assert C1XOptions.ResolveClassBeforeStaticInvoke : "need to add class initialization barrier for INVOKESTATIC";
             return new XirSnippet(invokeStaticTemplates.resolved, WordUtil.argument(Word.zero()));
         }
@@ -401,7 +400,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genGetField(XirSite site, XirArgument receiver, RiField field) {
         XirPair pair = getFieldTemplates[field.kind(true).ordinal()];
-        if (field.isResolved()) {
+        if (field instanceof RiResolvedField) {
             FieldActor fieldActor = (FieldActor) field;
             XirArgument offset = XirArgument.forInt(fieldActor.offset());
             return new XirSnippet(pair.resolved, receiver, offset);
@@ -414,7 +413,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genPutField(XirSite site, XirArgument receiver, RiField field, XirArgument value) {
         XirPair pair = putFieldTemplates[field.kind(true).ordinal()];
-        if (field.isResolved()) {
+        if (field instanceof RiResolvedField) {
             FieldActor fieldActor = (FieldActor) field;
             XirArgument offset = XirArgument.forInt(fieldActor.offset());
             return new XirSnippet(pair.resolved, receiver, value, offset);
@@ -426,7 +425,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genGetStatic(XirSite site, XirArgument staticTuple, RiField field) {
         XirPair pair = getStaticFieldTemplates[field.kind(true).ordinal()];
-        if (field.isResolved()) {
+        if (field instanceof RiResolvedField) {
             FieldActor fieldActor = (FieldActor) field;
             XirArgument offset = XirArgument.forInt(fieldActor.offset());
             return new XirSnippet(pair.resolved, staticTuple, offset);
@@ -438,7 +437,7 @@ public class MaxXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genPutStatic(XirSite site, XirArgument staticTuple, RiField field, XirArgument value) {
         XirPair pair = putStaticFieldTemplates[field.kind(true).ordinal()];
-        if (field.isResolved()) {
+        if (field instanceof RiResolvedField) {
             FieldActor fieldActor = (FieldActor) field;
             XirArgument offset = XirArgument.forInt(fieldActor.offset());
             return new XirSnippet(pair.resolved, staticTuple, value, offset);
