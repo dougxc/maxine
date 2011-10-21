@@ -540,7 +540,7 @@ public class HotSpotRuntime implements GraalRuntime {
                         IfNode elementClassIf = graph.add(new IfNode(graph.unique(new CompareNode(srcClass, Condition.EQ, destClass)), 0.5));
                         destClass.setNext(elementClassIf);
                         ifNode.setFalseSuccessor(BeginNode.begin(anchor));
-                        newInvoke = graph.add(new InvokeNode(bci, Bytecodes.INVOKESTATIC, CiKind.Void, new ValueNode[]{src, srcPos, dest, destPos, length}, method, method.signature().returnType(method.holder())));
+                        newInvoke = graph.add(new InvokeNode(bci, Bytecodes.INVOKESTATIC, method, new ValueNode[]{src, srcPos, dest, destPos, length}, method.signature().returnType(holder)));
                         newInvoke.setCanInline(false);
                         newInvoke.setStateAfter(stateAfter);
                         elementClassIf.setFalseSuccessor(BeginNode.begin(newInvoke));
