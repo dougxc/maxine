@@ -68,7 +68,7 @@ public final class GraphBuilderPhase extends Phase {
      */
     public static final int TRACELEVEL_STATE = 2;
 
-    private Graph<EntryPointNode> graph;
+    private StructuredGraph graph;
 
     private final CiStatistics stats;
     private final RiRuntime runtime;
@@ -90,8 +90,6 @@ public final class GraphBuilderPhase extends Phase {
     private ExceptionBlock unwindBlock;
     private Block returnBlock;
 
-    private boolean storeResultGraph;
-
     private final boolean useBranchPrediction;
     private final boolean eagerResolving;
 
@@ -109,7 +107,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private BitSet canTrap;
 
-    public static final Map<RiMethod, Graph<EntryPointNode>> cachedGraphs = new WeakHashMap<RiMethod, Graph<EntryPointNode>>();
+    public static final Map<RiMethod, StructuredGraph> cachedGraphs = new WeakHashMap<RiMethod, StructuredGraph>();
 
 
     public GraphBuilderPhase(GraalContext context, RiRuntime runtime, RiResolvedMethod method) {
@@ -132,11 +130,10 @@ public final class GraphBuilderPhase extends Phase {
         this.stream = new BytecodeStream(method.code());
 
         this.constantPool = runtime.getConstantPool(method);
-        this.storeResultGraph = GraalOptions.CacheGraphs;
     }
 
     @Override
-    protected void run(Graph<EntryPointNode> graph) {
+    protected void run(StructuredGraph graph) {
         assert graph != null;
         this.graph = graph;
         this.frameState = new FrameStateBuilder(method, method.maxLocals(), method.maxStackSize(), graph);
@@ -215,9 +212,9 @@ public final class GraphBuilderPhase extends Phase {
             }
         }
 
-        if (storeResultGraph) {
+        if (GraalOptions.CacheGraphs && !graph.hasNode(DeoptimizeNode.class)) {
             // Create duplicate graph.
-            Graph<EntryPointNode> duplicate = new Graph<EntryPointNode>(new EntryPointNode(null));
+            StructuredGraph duplicate = new StructuredGraph();
             Map<Node, Node> replacements = new IdentityHashMap<Node, Node>();
             replacements.put(graph.start(), duplicate.start());
             duplicate.addDuplicate(graph.getNodes(), replacements);
@@ -434,11 +431,10 @@ public final class GraphBuilderPhase extends Phase {
             // this is a load of class constant which might be unresolved
             RiType riType = (RiType) con;
             if (riType instanceof RiResolvedType) {
-                frameState.push(CiKind.Object, append(graph.unique(new ConstantNode(((RiResolvedType) riType).getEncoding(Representation.JavaClass)))));
+                frameState.push(CiKind.Object, append(ConstantNode.forCiConstant(((RiResolvedType) riType).getEncoding(Representation.JavaClass), runtime, graph)));
             } else {
-                storeResultGraph = false;
                 append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
-                frameState.push(CiKind.Object, append(ConstantNode.forObject(null, graph)));
+                frameState.push(CiKind.Object, append(ConstantNode.forObject(null, runtime, graph)));
             }
         } else if (con instanceof CiConstant) {
             CiConstant constant = (CiConstant) con;
@@ -739,7 +735,7 @@ public final class GraphBuilderPhase extends Phase {
             frameState.apush(checkCast);
         } else {
             ValueNode object = frameState.apop();
-            append(graph.add(new FixedGuardNode(graph.unique(new CompareNode(object, Condition.EQ, graph.unique(new ConstantNode(CiConstant.NULL_OBJECT)))))));
+            append(graph.add(new FixedGuardNode(graph.unique(new CompareNode(object, Condition.EQ, ConstantNode.forObject(null, runtime, graph))))));
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
     }
@@ -762,7 +758,6 @@ public final class GraphBuilderPhase extends Phase {
             NewInstanceNode n = graph.add(new NewInstanceNode((RiResolvedType) type));
             frameState.apush(append(n));
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -804,7 +799,6 @@ public final class GraphBuilderPhase extends Phase {
             NewArrayNode n = graph.add(new NewObjectArrayNode((RiResolvedType) type, length));
             frameState.apush(append(n));
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -822,7 +816,6 @@ public final class GraphBuilderPhase extends Phase {
             NewArrayNode n = graph.add(new NewMultiArrayNode((RiResolvedType) type, dims, cpi, constantPool));
             frameState.apush(append(n));
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -837,7 +830,6 @@ public final class GraphBuilderPhase extends Phase {
             LoadFieldNode load = graph.add(new LoadFieldNode(receiver, (RiResolvedField) field));
             appendOptimizedLoadField(kind, load);
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             frameState.push(kind.stackKind(), append(ConstantNode.defaultForKind(kind, graph)));
         }
@@ -863,7 +855,7 @@ public final class GraphBuilderPhase extends Phase {
         lastInstr = trueSucc;
 
         if (GraalOptions.OmitHotExceptionStacktrace) {
-            ValueNode exception = ConstantNode.forObject(new NullPointerException(), graph);
+            ValueNode exception = ConstantNode.forObject(new NullPointerException(), runtime, graph);
             return new ExceptionInfo(falseSucc, exception);
         } else {
             RuntimeCallNode call = graph.add(new RuntimeCallNode(CiRuntimeCall.CreateNullPointerException));
@@ -882,7 +874,7 @@ public final class GraphBuilderPhase extends Phase {
         lastInstr = trueSucc;
 
         if (GraalOptions.OmitHotExceptionStacktrace) {
-            ValueNode exception = ConstantNode.forObject(new ArrayIndexOutOfBoundsException(), graph);
+            ValueNode exception = ConstantNode.forObject(new ArrayIndexOutOfBoundsException(), runtime, graph);
             return new ExceptionInfo(falseSucc, exception);
         } else {
             RuntimeCallNode call = graph.add(new RuntimeCallNode(CiRuntimeCall.CreateOutOfBoundsException, new ValueNode[] {index}));
@@ -941,7 +933,6 @@ public final class GraphBuilderPhase extends Phase {
             StoreFieldNode store = graph.add(new StoreFieldNode(receiver, (RiResolvedField) field, value));
             appendOptimizedStoreField(store);
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
         }
     }
@@ -984,7 +975,6 @@ public final class GraphBuilderPhase extends Phase {
         if (initialized) {
             return appendConstant(((RiResolvedType) holder).getEncoding(representation));
         } else {
-            storeResultGraph = false;
             append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             return null;
         }
@@ -1048,7 +1038,6 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void genInvokeDeopt(RiMethod unresolvedTarget, boolean withReceiver) {
-        storeResultGraph = false;
         append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
         frameState.popArguments(unresolvedTarget.signature().argumentSlots(withReceiver), unresolvedTarget.signature().argumentCount(withReceiver));
         CiKind kind = unresolvedTarget.signature().returnKind(false);
@@ -1086,7 +1075,6 @@ public final class GraphBuilderPhase extends Phase {
     private void appendInvoke(InvokeKind invokeKind, RiResolvedMethod targetMethod, ValueNode[] args, int cpi, RiConstantPool constantPool) {
         CiKind resultType = targetMethod.signature().returnKind(false);
         if (GraalOptions.DeoptALot) {
-            storeResultGraph = false;
             DeoptimizeNode deoptimize = graph.add(new DeoptimizeNode(DeoptAction.None));
             deoptimize.setMessage("invoke " + targetMethod.name());
             append(deoptimize);
@@ -1228,7 +1216,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private ConstantNode appendConstant(CiConstant constant) {
-        return graph.unique(new ConstantNode(constant));
+        return ConstantNode.forCiConstant(constant, runtime, graph);
     }
 
     private ValueNode append(FixedNode fixed) {
@@ -1312,8 +1300,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private ValueNode synchronizedObject(FrameStateAccess state, RiResolvedMethod target) {
         if (isStatic(target.accessFlags())) {
-            ConstantNode classConstant = graph.unique(new ConstantNode(target.holder().getEncoding(Representation.JavaClass)));
-            return append(classConstant);
+            return append(ConstantNode.forCiConstant(target.holder().getEncoding(Representation.JavaClass), runtime, graph));
         } else {
             return state.localAt(0);
         }
@@ -1396,7 +1383,6 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void createDeoptBlock(DeoptBlock block) {
-        storeResultGraph = false;
         append(graph.add(new DeoptimizeNode(DeoptAction.InvalidateReprofile)));
     }
 

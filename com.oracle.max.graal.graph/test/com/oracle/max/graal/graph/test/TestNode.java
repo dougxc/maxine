@@ -20,21 +20,20 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.compiler.phases;
+package com.oracle.max.graal.graph.test;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.graph.*;
 
-public class RemovePlaceholderPhase extends Phase {
 
-    public RemovePlaceholderPhase(GraalContext context) {
-        super(context);
+public class TestNode extends Node implements Node.IterableNodeType {
+    @Data private String name;
+
+    public TestNode(String name) {
+        this.name = name;
     }
 
-    @Override
-    protected void run(StructuredGraph graph) {
-        for (PlaceholderNode n : graph.getNodes(PlaceholderNode.class)) {
-            n.replaceAndDelete(n.next());
-        }
+
+    public String getName() {
+        return name;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,39 +20,11 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.nodes;
+package com.oracle.max.graal.compiler.ext;
 
-import java.util.*;
+import com.oracle.max.graal.nodes.*;
+import com.sun.cri.bytecode.*;
 
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
-
-public class EntryPointNode extends BeginNode {
-    private final RiRuntime runtime;
-    private final CiAssumptions assumptions = new CiAssumptions();
-
-    public EntryPointNode() {
-        this(null);
-    }
-
-    public EntryPointNode(RiRuntime runtime) {
-        this.runtime = runtime;
-    }
-
-    @Override
-    public void delete() {
-        throw new UnsupportedOperationException();
-    }
-
-    public Collection<LocalNode> locals() {
-        return ValueUtil.filter(this.usages(), LocalNode.class);
-    }
-
-    public RiRuntime runtime() {
-        return runtime;
-    }
-
-    public CiAssumptions assumptions() {
-        return assumptions;
-    }
+public interface ExtendedBytecodeHandler {
+    void handle(int opcode, BytecodeStream s, StructuredGraph graph);
 }
