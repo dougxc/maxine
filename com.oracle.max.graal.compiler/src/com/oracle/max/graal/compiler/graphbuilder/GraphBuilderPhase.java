@@ -116,6 +116,10 @@ public final class GraphBuilderPhase extends Phase implements GraphBuilderTool {
         this.extendedBytecodeHandler = extendedBytecodeHandler;
     }
 
+    public GraphBuilderPhase(RiRuntime runtime, RiResolvedMethod method) {
+        this(null, runtime, method);
+    }
+
     public GraphBuilderPhase(GraalContext context, RiRuntime runtime, RiResolvedMethod method) {
         this(context, runtime, method, null);
     }
@@ -1121,7 +1125,7 @@ public final class GraphBuilderPhase extends Phase implements GraphBuilderTool {
     private void genReturn(ValueNode x) {
         frameState.clearStack();
         if (x != null) {
-            frameState.push(x.kind, x);
+            frameState.push(x.kind(), x);
         }
         appendGoto(createTarget(returnBlock(bci()), frameState));
     }
@@ -1496,15 +1500,15 @@ public final class GraphBuilderPhase extends Phase implements GraphBuilderTool {
             log.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
-                log.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind.javaName, value));
+                log.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().javaName, value));
             }
             for (int i = 0; i < frameState.stackSize(); ++i) {
                 ValueNode value = frameState.stackAt(i);
-                log.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind.javaName, value));
+                log.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().javaName, value));
             }
             for (int i = 0; i < frameState.locksSize(); ++i) {
                 ValueNode value = frameState.lockAt(i);
-                log.println(String.format("|   lock[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind.javaName, value));
+                log.println(String.format("|   lock[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().javaName, value));
             }
         }
     }

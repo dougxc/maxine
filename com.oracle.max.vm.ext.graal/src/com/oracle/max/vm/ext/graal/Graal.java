@@ -31,8 +31,10 @@ import com.oracle.max.asm.*;
 import com.oracle.max.cri.intrinsics.*;
 import com.oracle.max.cri.intrinsics.IntrinsicImpl.Registry;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.GraalCompiler.PhasePosition;
 import com.oracle.max.graal.compiler.ext.*;
 import com.oracle.max.graal.compiler.graphbuilder.*;
+import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.NodeClass.CalcOffset;
 import com.oracle.max.graal.nodes.*;
@@ -122,11 +124,14 @@ public class Graal implements RuntimeCompiler {
 
         if (isHosted() && phase == Phase.HOSTED_COMPILING) {
             Registry intrinsicRegistry = new IntrinsicImpl.Registry();
-            MaxineIntrinsicImplementations.initialize(intrinsicRegistry);
+            GraalMaxineIntrinsicImplementations.initialize(intrinsicRegistry);
             runtime.setIntrinsicRegistry(intrinsicRegistry);
 
             GraalContext context = new GraalContext("Virtual Machine Compiler");
             compiler = new GraalCompiler(context, runtime, target, xirGenerator, vm().registerConfigs.compilerStub, extendedBytecodeHandler);
+            compiler.addPhase(PhasePosition.HIGH_LEVEL, new MustInlineAndFoldPhase(runtime));
+            compiler.addPhase(PhasePosition.HIGH_LEVEL, new IntrinsificationPhase(null, runtime));
+            compiler.addPhase(PhasePosition.MID_LEVEL, new WordTypeRewriterPhase());
 
             // search for the runtime call and register critical methods
             for (Method m : RuntimeCalls.class.getDeclaredMethods()) {

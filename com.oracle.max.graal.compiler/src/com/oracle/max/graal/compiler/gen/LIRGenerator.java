@@ -111,7 +111,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public CiValue setResult(ValueNode x, CiValue operand) {
-        assert (operand.isVariable() && x.kind == operand.kind) || (operand.isConstant() && x.kind == operand.kind.stackKind());
+        assert (operand.isVariable() && x.kind() == operand.kind) || (operand.isConstant() && x.kind() == operand.kind.stackKind());
 
         x.setOperand(operand);
         if (GraalOptions.DetailedAsserts) {
@@ -336,7 +336,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             CiValue src = args.locations[i];
             CiVariable dest = emitMove(src);
             assert src.isLegal() : "check";
-            assert src.kind.stackKind() == local.kind.stackKind() : "local type check failed";
+            assert src.kind.stackKind() == local.kind().stackKind() : "local type check failed";
             setResult(local, dest);
         }
     }
@@ -347,7 +347,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             int slot = 0;
             for (CiKind kind : arguments) {
                 LocalNode local = (LocalNode) fs.localAt(slot);
-                assert local != null && local.kind == kind.stackKind() : "No valid local in framestate for slot #" + slot + " (" + local + ")";
+                assert local != null && local.kind() == kind.stackKind() : "No valid local in framestate for slot #" + slot + " (" + local + ")";
                 slot++;
                 if (slot < fs.localsSize() && fs.localAt(slot) == null) {
                     slot++;
@@ -479,8 +479,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     @Override
     public void visitReturn(ReturnNode x) {
         CiValue operand = CiValue.IllegalValue;
-        if (!x.kind.isVoid()) {
-            operand = resultOperandFor(x.kind);
+        if (!x.kind().isVoid()) {
+            operand = resultOperandFor(x.kind());
             emitMove(operand(x.result()), operand);
         }
         XirSnippet epilogue = xir.genEpilogue(site(x), compilation.method);
@@ -667,7 +667,32 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     public abstract void emitBranch(CiValue left, CiValue right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRDebugInfo info);
     public abstract CiVariable emitCMove(CiValue leftVal, CiValue right, Condition cond, boolean unorderedIsTrue, CiValue trueValue, CiValue falseValue);
 
+    protected FrameState stateBeforeCallReturn(FrameState stateAfter, CallTargetNode call, int bci) {
+        return stateAfter.duplicateModified(bci, stateAfter.rethrowException(), call.returnKind());
+    }
 
+    protected FrameState stateBeforeCallWithArguments(FrameState stateAfter, MethodCallTargetNode call, int bci) {
+        return stateAfter.duplicateModified(bci, stateAfter.rethrowException(), call.returnKind(), toJVMArgumentStack(call.targetMethod().signature(), call.isStatic(), call.arguments()));
+    }
+
+    private static ValueNode[] toJVMArgumentStack(RiSignature signature, boolean isStatic, NodeInputList<ValueNode> arguments) {
+        int slotCount = signature.argumentSlots(!isStatic);
+        ValueNode[] stack = new ValueNode[slotCount];
+        int stackIndex = 0;
+        int argumentIndex = 0;
+        for (ValueNode arg : arguments) {
+            stack[stackIndex] = arg;
+
+            if (stackIndex == 0 && !isStatic) {
+                // Current argument is receiver.
+                stackIndex += FrameStateBuilder.stackSlots(CiKind.Object);
+            } else {
+                stackIndex += FrameStateBuilder.stackSlots(signature.argumentKindAt(argumentIndex, false));
+                argumentIndex++;
+            }
+        }
+        return stack;
+    }
 
     @Override
     public void emitInvoke(InvokeNode x) {
@@ -699,7 +724,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 break;
         }
 
-        CiValue resultOperand = resultOperandFor(x.kind);
+        CiValue resultOperand = resultOperandFor(x.kind());
 
         CiKind[] signature = CiUtil.signatureToKinds(callTarget.targetMethod().signature(), callTarget.isStatic() ? null : callTarget.targetMethod().holder().kind(true));
         CiCallingConvention cc = compilation.registerConfig.getCallingConvention(JavaCall, signature, target(), false);
@@ -724,32 +749,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         if (resultOperand.isLegal()) {
             setResult(x, emitMove(resultOperand));
         }
-    }
-
-    private FrameState stateBeforeCallReturn(FrameState stateAfter, CallTargetNode call, int bci) {
-        // TODO: this does not work with the Word type of Maxine, since it is a Long value taking only one stack slot.
-        return stateAfter.duplicateModified(bci, stateAfter.rethrowException(), call.returnKind());
-    }
-
-    private FrameState stateBeforeCallWithArguments(FrameState stateAfter, CallTargetNode call, int bci) {
-        // TODO: this does not work with the Word type of Maxine, since it is a Long value taking only one stack slot.
-        return stateAfter.duplicateModified(bci, stateAfter.rethrowException(), call.returnKind(), toJVMArgumentStack(call.arguments()));
-    }
-
-    private static ValueNode[] toJVMArgumentStack(NodeInputList<ValueNode> arguments) {
-        // TODO: this does not work with the Word type of Maxine, since it is a Long value taking only one stack slot.
-        int sz = 0;
-        for (ValueNode value : arguments) {
-            sz += FrameStateBuilder.isTwoSlot(value.kind) ? 2 : 1;
-        }
-        ValueNode[] stack = new ValueNode[sz];
-        int i = 0;
-        for (ValueNode value : arguments) {
-            stack[i] = value;
-            i += FrameStateBuilder.isTwoSlot(value.kind) ? 2 : 1;
-        }
-        return stack;
-
     }
 
     private List<CiValue> visitInvokeArguments(CiCallingConvention cc, Iterable<ValueNode> arguments, List<CiValue> pointerSlots) {
@@ -1066,7 +1065,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             // Otherwise it is assumed that the result is part of the inputs
             if (resultOperand.kind != CiKind.Void && resultOperand.kind != CiKind.Illegal) {
                 if (setInstructionResult) {
-                    outputOperand = newVariable(instruction.kind.stackKind());
+                    outputOperand = newVariable(instruction.kind().stackKind());
                 } else {
                     outputOperand = newVariable(resultOperand.kind.stackKind());
                 }
@@ -1174,6 +1173,321 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return operands[resultOperand.index];
     }
 
+<<<<<<< local
+    @Override
+    public void visitTableSwitch(TableSwitchNode x) {
+        CiVariable value = load(operand(x.value()));
+        setNoResult(x);
+
+        // TODO: tune the defaults for the controls used to determine what kind of translation to use
+        if (x.numberOfCases() == 0 || x.numberOfCases() <= GraalOptions.SequentialSwitchLimit) {
+            int loKey = x.lowKey();
+            int len = x.numberOfCases();
+            for (int i = 0; i < len; i++) {
+                emitBranch(value, CiConstant.forInt(i + loKey), Condition.EQ, false, getLIRBlock(x.blockSuccessor(i)), null);
+            }
+            emitJump(getLIRBlock(x.defaultSuccessor()), null);
+        } else {
+            SwitchRange[] switchRanges = createLookupRanges(x);
+            int rangeDensity = x.numberOfCases() / switchRanges.length;
+            if (rangeDensity >= GraalOptions.RangeTestsSwitchDensity) {
+                visitSwitchRanges(switchRanges, value, getLIRBlock(x.defaultSuccessor()));
+            } else {
+                LabelRef[] targets = new LabelRef[x.numberOfCases()];
+                for (int i = 0; i < x.numberOfCases(); ++i) {
+                    targets[i] = getLIRBlock(x.blockSuccessor(i));
+                }
+                emitTableSwitch(x.lowKey(), getLIRBlock(x.defaultSuccessor()), targets, value);
+            }
+        }
+    }
+
+    protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, CiValue index);
+
+
+    @Override
+    public void visitDeoptimize(DeoptimizeNode deoptimize) {
+        LIRDebugInfo info = state();
+        Label stubEntry = createDeoptStub(deoptimize.action(), info, deoptimize);
+        emitJump(LabelRef.forLabel(stubEntry), info);
+    }
+
+    private void blockDoEpilog() {
+        if (GraalOptions.PrintIRWithLIR) {
+            TTY.println();
+        }
+    }
+
+    private void blockDoProlog() {
+        if (GraalOptions.PrintIRWithLIR) {
+            TTY.print(currentBlock.toString());
+        }
+        // set up the list of LIR instructions
+        assert currentBlock.lir() == null : "LIR list already computed for this block";
+        currentBlock.setLir(new ArrayList<LIRInstruction>());
+
+        emitLabel(currentBlock.label(), currentBlock.align());
+    }
+
+    @Override
+    public void visitRegisterFinalizer(RegisterFinalizerNode x) {
+        CiValue receiver = operand(x.object());
+        LIRDebugInfo info = state();
+        callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
+        setNoResult(x);
+    }
+
+    private void visitSwitchRanges(SwitchRange[] x, CiVariable value, LabelRef defaultSux) {
+        for (int i = 0; i < x.length; i++) {
+            SwitchRange oneRange = x[i];
+            int lowKey = oneRange.lowKey;
+            int highKey = oneRange.highKey;
+            LabelRef dest = oneRange.sux;
+            if (lowKey == highKey) {
+                emitBranch(value, CiConstant.forInt(lowKey), Condition.EQ, false, dest, null);
+            } else if (highKey - lowKey == 1) {
+                emitBranch(value, CiConstant.forInt(lowKey), Condition.EQ, false, dest, null);
+                emitBranch(value, CiConstant.forInt(highKey), Condition.EQ, false, dest, null);
+            } else {
+                Label l = new Label();
+                emitBranch(value, CiConstant.forInt(lowKey), Condition.LT, false, LabelRef.forLabel(l), null);
+                emitBranch(value, CiConstant.forInt(highKey), Condition.LE, false, dest, null);
+                emitLabel(l, false);
+            }
+        }
+        emitJump(defaultSux, null);
+    }
+
+    protected final CiValue callRuntime(CiRuntimeCall runtimeCall, LIRDebugInfo info, CiValue... args) {
+        // get a result register
+        CiKind result = runtimeCall.resultKind;
+        CiKind[] arguments = runtimeCall.arguments;
+
+        CiValue physReg = result.isVoid() ? IllegalValue : resultOperandFor(result);
+
+        List<CiValue> argumentList;
+        if (arguments.length > 0) {
+            // move the arguments into the correct location
+            CiCallingConvention cc = compilation.registerConfig.getCallingConvention(RuntimeCall, arguments, target(), false);
+            compilation.frameMap().adjustOutgoingStackSize(cc, RuntimeCall);
+            assert cc.locations.length == args.length : "argument count mismatch";
+            for (int i = 0; i < args.length; i++) {
+                CiValue arg = args[i];
+                CiValue loc = cc.locations[i];
+                emitMove(arg, loc);
+            }
+            argumentList = Arrays.asList(cc.locations);
+        } else {
+            // no arguments
+            assert args == null || args.length == 0;
+            argumentList = Util.uncheckedCast(Collections.emptyList());
+        }
+
+        append(StandardOpcode.DIRECT_CALL.create(runtimeCall, physReg, argumentList, null, info, null, null));
+
+        return physReg;
+    }
+
+    protected final CiVariable callRuntimeWithResult(CiRuntimeCall runtimeCall, LIRDebugInfo info, CiValue... args) {
+        CiValue location = callRuntime(runtimeCall, info, args);
+        return emitMove(location);
+    }
+
+    SwitchRange[] createLookupRanges(LookupSwitchNode x) {
+        // we expect the keys to be sorted by increasing value
+        List<SwitchRange> res = new ArrayList<SwitchRange>(x.numberOfCases());
+        int len = x.numberOfCases();
+        if (len > 0) {
+            LabelRef defaultSux = getLIRBlock(x.defaultSuccessor());
+            int key = x.keyAt(0);
+            LabelRef sux = getLIRBlock(x.blockSuccessor(0));
+            SwitchRange range = new SwitchRange(key, sux);
+            for (int i = 1; i < len; i++) {
+                int newKey = x.keyAt(i);
+                LabelRef newSux = getLIRBlock(x.blockSuccessor(i));
+                if (key + 1 == newKey && sux == newSux) {
+                    // still in same range
+                    range.highKey = newKey;
+                } else {
+                    // skip tests which explicitly dispatch to the default
+                    if (range.sux != defaultSux) {
+                        res.add(range);
+                    }
+                    range = new SwitchRange(newKey, newSux);
+                }
+                key = newKey;
+                sux = newSux;
+            }
+            if (res.size() == 0 || res.get(res.size() - 1) != range) {
+                res.add(range);
+            }
+        }
+        return res.toArray(new SwitchRange[res.size()]);
+    }
+
+    SwitchRange[] createLookupRanges(TableSwitchNode x) {
+        // TODO: try to merge this with the code for LookupSwitch
+        List<SwitchRange> res = new ArrayList<SwitchRange>(x.numberOfCases());
+        int len = x.numberOfCases();
+        if (len > 0) {
+            LabelRef sux = getLIRBlock(x.blockSuccessor(0));
+            int key = x.lowKey();
+            LabelRef defaultSux = getLIRBlock(x.defaultSuccessor());
+            SwitchRange range = new SwitchRange(key, sux);
+            for (int i = 0; i < len; i++, key++) {
+                LabelRef newSux = getLIRBlock(x.blockSuccessor(i));
+                if (sux == newSux) {
+                    // still in same range
+                    range.highKey = key;
+                } else {
+                    // skip tests which explicitly dispatch to the default
+                    if (sux != defaultSux) {
+                        res.add(range);
+                    }
+                    range = new SwitchRange(key, newSux);
+                }
+                sux = newSux;
+            }
+            if (res.size() == 0 || res.get(res.size() - 1) != range) {
+                res.add(range);
+            }
+        }
+        return res.toArray(new SwitchRange[res.size()]);
+    }
+
+    @Override
+    public void visitVolatileMemoryRead(VolatileReadNode memRead) {
+        // TODO Warning: the preVolatileRead is missing here, and cannot be inserted: since
+        // the actual read node was already emitted earlier (much earlier?), the "load" here only
+        // queries the already generated result variable.
+        CiValue readValue = operand(memRead.getReadNode());
+        emitMembar(JMM_POST_VOLATILE_READ);
+        setResult(memRead, emitMove(readValue));
+    }
+
+
+    @Override
+    public void visitMerge(MergeNode x) {
+        if (x.next() instanceof LoopBeginNode) {
+            moveToPhi((LoopBeginNode) x.next(), x);
+        }
+    }
+
+    @Override
+    public void visitEndNode(EndNode end) {
+        setNoResult(end);
+        assert end.merge() != null;
+        moveToPhi(end.merge(), end);
+        emitJump(getLIRBlock(end.merge()), null);
+    }
+
+    @Override
+    public void visitLoopEnd(LoopEndNode x) {
+        setNoResult(x);
+        moveToPhi(x.loopBegin(), x);
+        if (GraalOptions.GenLoopSafepoints) {
+            XirSnippet snippet = xir.genSafepointPoll(site(x));
+            emitXir(snippet, x, state(), null, false);
+        }
+        emitJump(getLIRBlock(x.loopBegin()), null);
+    }
+
+    public void emitSafepointPoll(FixedNode x) {
+        XirSnippet snippet = xir.genSafepointPoll(site(x));
+        emitXir(snippet, x, state(), null, false);
+    }
+
+    private void moveToPhi(MergeNode merge, Node pred) {
+        if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
+            TTY.println("MOVE TO PHI from " + pred + " to " + merge);
+        }
+        int nextSuccIndex = merge.phiPredecessorIndex(pred);
+        PhiResolver resolver = new PhiResolver(this);
+        for (PhiNode phi : merge.phis()) {
+            if (phi.type() == PhiType.Value) {
+                ValueNode curVal = phi.valueAt(nextSuccIndex);
+                resolver.move(operand(curVal), operandForPhi(phi));
+            }
+        }
+        resolver.dispose();
+    }
+
+    private CiValue operandForPhi(PhiNode phi) {
+        assert phi.type() == PhiType.Value : "wrong phi type: " + phi;
+        if (phi.operand().isIllegal()) {
+            // allocate a variable for this phi
+            CiVariable operand = newVariable(phi.kind());
+            setResult(phi, operand);
+        }
+        return phi.operand();
+    }
+
+    protected void postGCWriteBarrier(CiValue addr, CiValue newVal) {
+       XirSnippet writeBarrier = xir.genWriteBarrier(toXirArgument(addr));
+       if (writeBarrier != null) {
+           emitXir(writeBarrier, null, null, null, false);
+       }
+    }
+
+    protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {
+    }
+
+    protected void setNoResult(ValueNode x) {
+        x.clearOperand();
+    }
+
+    public LIRDebugInfo state() {
+        assert lastState != null : "must have state before instruction";
+        return stateFor(lastState);
+    }
+
+    protected LIRDebugInfo stateFor(FrameState state) {
+        if (compilation.placeholderState != null) {
+            state = compilation.placeholderState;
+        }
+        return new LIRDebugInfo(state);
+    }
+
+    List<CiValue> visitInvokeArguments(CiCallingConvention cc, Iterable<ValueNode> arguments, List<CiValue> pointerSlots) {
+        // for each argument, load it into the correct location
+        List<CiValue> argList = new ArrayList<CiValue>();
+        int j = 0;
+        for (ValueNode arg : arguments) {
+            if (arg != null) {
+                CiValue operand = cc.locations[j++];
+                if (operand.isRegister()) {
+                    emitMove(operand(arg), operand.asRegister().asValue(operand.kind.stackKind()));
+                } else {
+                    assert !((CiStackSlot) operand).inCallerFrame();
+                    CiValue param = loadForStore(operand(arg), operand.kind);
+                    emitMove(param, operand);
+
+                    if (arg.kind() == CiKind.Object && pointerSlots != null) {
+                        // This slot must be marked explicitly in the pointer map.
+                        pointerSlots.add(operand);
+                    }
+                }
+                argList.add(operand);
+            }
+        }
+        return argList;
+    }
+
+    /**
+     * Gets the ABI specific operand used to return a value of a given kind from a method.
+     *
+     * @param kind the kind of value being returned
+     * @return the operand representing the ABI defined location used return a value of kind {@code kind}
+     */
+    protected CiValue resultOperandFor(CiKind kind) {
+        if (kind == CiKind.Void) {
+            return IllegalValue;
+        }
+        return compilation.registerConfig.getReturnRegister(kind).asValue(kind);
+    }
+
+=======
+>>>>>>> other
     protected XirSupport site(ValueNode x) {
         return xirSupport.site(x);
     }
@@ -1234,4 +1548,57 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return "XirSupport<" + current + ">";
         }
     }
+<<<<<<< local
+
+    @Override
+    public void visitFrameState(FrameState i) {
+        // nothing to do for now
+    }
+
+    @Override
+    public void visitUnwind(UnwindNode x) {
+        // move exception oop into fixed register
+        CiCallingConvention callingConvention = compilation.registerConfig.getCallingConvention(RuntimeCall, new CiKind[]{CiKind.Object}, target(), false);
+        compilation.frameMap().adjustOutgoingStackSize(callingConvention, RuntimeCall);
+        CiValue argumentOperand = callingConvention.locations[0];
+        emitMove(operand(x.exception()), argumentOperand);
+        List<CiValue> args = new ArrayList<CiValue>(1);
+        append(StandardOpcode.DIRECT_CALL.create(CiRuntimeCall.UnwindException, CiValue.IllegalValue, args, null, null, null, null));
+        setNoResult(x);
+    }
+
+    @Override
+    public void visitConditional(ConditionalNode conditional) {
+        CiValue tVal = operand(conditional.trueValue());
+        CiValue fVal = operand(conditional.falseValue());
+        setResult(conditional, emitBooleanBranch(conditional.condition(), null, null, tVal, fVal, null));
+    }
+
+    @Override
+    public void visitRuntimeCall(RuntimeCallNode x) {
+        LIRDebugInfo info = null;
+        FrameState stateAfter = x.stateAfter();
+        if (stateAfter != null) {
+            // TODO change back to stateBeforeReturn() when RuntimeCallNode uses a CallTargetNode
+            FrameState stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
+            info = stateFor(stateBeforeReturn);
+        }
+        CiValue resultOperand = resultOperandFor(x.kind());
+        CiCallingConvention cc = compilation.registerConfig.getCallingConvention(RuntimeCall, x.call().arguments, target(), false);
+        compilation.frameMap().adjustOutgoingStackSize(cc, RuntimeCall);
+        List<CiValue> pointerSlots = new ArrayList<CiValue>(2);
+        List<CiValue> argList = visitInvokeArguments(cc, x.arguments(), pointerSlots);
+
+        append(StandardOpcode.DIRECT_CALL.create(x.call(), resultOperand, argList, null, info, null, null));
+
+        if (resultOperand.isLegal()) {
+            setResult(x, emitMove(resultOperand));
+        }
+    }
+
+    public abstract void emitMembar(int barriers);
+
+    protected abstract Label createDeoptStub(DeoptAction action, LIRDebugInfo info, Object deoptInfo);
+=======
+>>>>>>> other
 }
