@@ -20,21 +20,11 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.cri.ri;
+package com.sun.cri.ci;
 
 /**
- * Represents a compiled instance of a method. It may have been invalidated or removed in the meantime.
+ * This interface is used for {@link CiRuntimeCall#GenericCallback} runtime calls.
  */
-public interface RiCompiledMethod {
-
-    /**
-     * Returns the method to which the compiled code belongs.
-     * @return the method to which the compiled code belongs.
-     */
-    RiResolvedMethod method();
-
-    /**
-     * @return true if the code represented by this object is still valid, false otherwise (may happen due to deopt, etc.)
-     */
-    boolean isValid();
+public interface CiGenericCallback {
+    Object callback(Object arg);
 }

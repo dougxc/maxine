@@ -141,7 +141,7 @@ public final class GraalCompilation {
                 }
             } catch (CiBailout b) {
                 return new CiResult(null, b, stats);
-            } catch (VerificationError e) {
+            } catch (GraalInternalError e) {
                 throw e.addContext("method", CiUtil.format("%H.%n(%p):%r", method));
             } catch (Throwable t) {
                 if (GraalOptions.BailoutOnException) {
@@ -150,7 +150,7 @@ public final class GraalCompilation {
                     throw new RuntimeException("Exception while compiling: " + method, t);
                 }
             }
-        } catch (VerificationError error) {
+        } catch (GraalInternalError error) {
             if (context().isObserved()) {
                 if (error.node() != null) {
                     context().observable.fireCompilationEvent("VerificationError on Node " + error.node(), CompilationEvent.ERROR, this, error.node().graph());
@@ -167,6 +167,11 @@ public final class GraalCompilation {
 
         return new CiResult(targetMethod, null, stats);
     }
+
+    public static final int SCALE = 20;
+    public static int[] methodSizes = new int[20000 / SCALE];
+    public static String[] methodNames = new String[20000 / SCALE];
+    public static int methodCount = 0;
 
     /**
      * Builds the graph, optimizes it.
@@ -185,7 +190,7 @@ public final class GraalCompilation {
                 new DeadCodeEliminationPhase().apply(graph, context());
             }
 
-            if (GraalOptions.ProbabilityAnalysis) {
+            if (GraalOptions.ProbabilityAnalysis && graph.start().probability() == 0) {
                 new ComputeProbabilityPhase().apply(graph, context());
             }
 
@@ -193,8 +198,8 @@ public final class GraalCompilation {
                 new IntrinsificationPhase(compiler.runtime).apply(graph, context());
             }
 
-            if (GraalOptions.Inline) {
-                new InliningPhase(compiler.runtime, compiler.target, null, assumptions, plan).apply(graph, context());
+            if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
+                new InliningPhase(compiler.target, compiler.runtime, null, assumptions, plan).apply(graph, context());
                 new DeadCodeEliminationPhase().apply(graph, context());
             }
 
@@ -217,8 +222,8 @@ public final class GraalCompilation {
                 }
             }
 
-            if (GraalOptions.EscapeAnalysis) {
-                new EscapeAnalysisPhase(this, plan).apply(graph, context());
+            if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
+                new EscapeAnalysisPhase(compiler.target, compiler.runtime, assumptions, plan).apply(graph, context());
                 new CanonicalizerPhase(compiler.target, compiler.runtime, assumptions).apply(graph, context());
             }
 
@@ -271,7 +276,22 @@ public final class GraalCompilation {
             LIRBlock startBlock = valueToBlock.get(graph.start());
             assert startBlock != null;
             assert startBlock.numberOfPreds() == 0;
-
+/*
+            methodSizes[graph.getNodeCount() / SCALE]++;
+            methodNames[graph.getNodeCount() / SCALE] = InliningUtil.methodName(method);
+            if ((methodCount++ % 100) == 0) {
+                for (int i = 0; i < methodSizes.length; i++) {
+                    if (i < 30 || methodSizes[i] != 0) {
+                        System.out.print((i * SCALE) + ": ");
+                        int s = methodSizes[i];
+                        s = s > 80 ? 80 : s;
+                        for (int i2 = 0; i2 < s; i2++) {
+                            System.out.print('X');
+                        }
+                        System.out.println("  (" + methodSizes[i] + ") " + methodNames[i]);
+                    }
+                }
+            }*/
 
             context().timers.startScope("Compute Linear Scan Order");
             try {
