@@ -20,39 +20,32 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.graph;
+package com.oracle.max.graal.graph.iterators;
 
-import com.oracle.max.graal.graph.NodeClass.NodeClassIterator;
-import com.oracle.max.graal.graph.iterators.*;
+import java.util.*;
 
-public abstract class NodeSuccessorsIterable extends NodeIterable<Node> {
+import com.oracle.max.graal.graph.*;
 
-    @SuppressWarnings("unused")
-    public int explicitCount() {
-        int count = 0;
-        for (Node node : this) {
-            count++;
-        }
-        return count;
+public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
+    private final NodeIterable<T> nodeIterable;
+    private NodePredicate predicate = NodePredicate.TAUTOLOGY;
+    public FilteredNodeIterable(NodeIterable<T> nodeIterable) {
+        this.nodeIterable = nodeIterable;
+        this.until = nodeIterable.until;
     }
-
-    public Node first() {
-        for (Node node : this) {
-            return node;
-        }
-        return null;
+    @SuppressWarnings("unchecked")
+    public <F extends T> FilteredNodeIterable<F> and(Class<F> clazz) {
+        this.predicate = predicate.and(new TypePredicate(clazz));
+        return (FilteredNodeIterable<F>) this;
     }
-
-    public void replaceFirst(Node node, Node newNode) {
-        throw new UnsupportedOperationException("not implemented");
+    @SuppressWarnings("unchecked")
+    public FilteredNodeIterable<Node> or(Class<? extends Node> clazz) {
+        this.predicate = predicate.or(new TypePredicate(clazz));
+        return (FilteredNodeIterable<Node>) this;
     }
-
-    public void replace(Node node, Node other) {
-        throw new UnsupportedOperationException("not implemented");
-    }
-
-    public abstract boolean contains(Node node);
-
     @Override
-    public abstract NodeClassIterator iterator();
+    public Iterator<T> iterator() {
+        final Iterator<T> iterator = nodeIterable.iterator();
+        return new PredicatedProxyNodeIterator<T>(until, iterator, predicate);
+    }
 }
