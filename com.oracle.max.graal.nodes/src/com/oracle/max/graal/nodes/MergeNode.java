@@ -22,9 +22,8 @@
  */
 package com.oracle.max.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.iterators.*;
 import com.oracle.max.graal.nodes.spi.*;
 
 /**
@@ -138,7 +137,7 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
         return endAt(index);
     }
 
-    public Collection<PhiNode> phis() {
-        return ValueUtil.filter(this.usages(), PhiNode.class);
+    public NodeIterable<PhiNode> phis() {
+        return this.usages().filter(PhiNode.class);
     }
 }
