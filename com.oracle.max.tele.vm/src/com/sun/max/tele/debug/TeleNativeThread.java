@@ -160,6 +160,7 @@ public abstract class TeleNativeThread extends AbstractVmHolder
         this.breakpointIsAtInstructionPointer = platform().isa == ISA.SPARC;
         final String stackName = this.entityName + " Stack";
         this.teleStack = new TeleStack(teleProcess.vm(), this, stackName, params.stackRegion.start(), params.stackRegion.nBytes());
+        teleProcess.vm().addressSpace().add(this.teleStack.memoryRegion());
         this.updateTracer = new TimedTrace(TRACE_VALUE, tracePrefix() + " updating");
 
         tracer.end(null);
@@ -277,7 +278,7 @@ public abstract class TeleNativeThread extends AbstractVmHolder
         // ensures that it is always in sync.
         if (isLive()) {
             try {
-                return codeLocationFactory().createMachineCodeLocation(teleRegisterSet.instructionPointer(), "Instruction pointer");
+                return codeLocations().createMachineCodeLocation(teleRegisterSet.instructionPointer(), "Instruction pointer");
             } catch (InvalidCodeAddressException e) {
                 TeleWarning.message("Bad IP address " + e.getAddressString() + " in thread " + entityName() + ": " + e.getMessage());
             }
@@ -407,6 +408,7 @@ public abstract class TeleNativeThread extends AbstractVmHolder
      * Marks the thread as having died in the process; flushes all state accordingly.
      */
     final void setDead() {
+        vm().addressSpace().remove(teleStack.memoryRegion());
         state = DEAD;
         clearFrames();
         breakpoint = null;
