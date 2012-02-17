@@ -25,6 +25,7 @@ package com.sun.max.tele.reference;
 import java.util.concurrent.atomic.*;
 
 import com.sun.max.tele.*;
+import com.sun.max.unsafe.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.reference.*;
 
@@ -34,7 +35,7 @@ import com.sun.max.vm.reference.*;
  *
  * @see VmReferenceManager
  */
-public abstract class TeleReference extends Reference {
+public abstract class RemoteReference extends Reference {
 
     private final TeleVM vm;
 
@@ -42,11 +43,11 @@ public abstract class TeleReference extends Reference {
 
     private static final AtomicLong nextOID = new AtomicLong(1);
 
-    protected TeleReference forwardedTeleRef = null;
+    protected RemoteReference forwardedTeleRef = null;
 
     protected boolean collectedByGC = false;
 
-    protected TeleReference(TeleVM vm) {
+    protected RemoteReference(TeleVM vm) {
         this.vm = vm;
     }
 
@@ -63,6 +64,8 @@ public abstract class TeleReference extends Reference {
         return refOID;
     }
 
+    public abstract Address raw();
+
     /**
      * @return whether this instance is actually a local value dressed up to look like a remote reference
      */
@@ -70,10 +73,22 @@ public abstract class TeleReference extends Reference {
         return false;
     }
 
-    public boolean isLive() {
-        return memoryStatus() == ObjectMemoryStatus.LIVE;
+    /**
+     * @return the status of the memory to which this instance refers
+     */
+    public abstract ObjectStatus status();
+
+
+    /**
+     * Gets the reference to the location of the new copy of this object, <em>only</em> when the heap is in the
+     * {@linkplain HeapPhase#ANALYZING ANALYZING} phase, and <em>only</em> when the object is forwarded. {@code null}
+     * otherwise.
+     */
+    public RemoteReference getForwardReference() {
+        return null;
     }
 
+    // TODO (mlvdv) Old Heap
     /**
      * Records that this instance refers to an object that has been copied elsewhere, and all
      * references should subsequently be forwarded.
@@ -81,24 +96,21 @@ public abstract class TeleReference extends Reference {
      * @param forwardedMutableTeleRef reference to another VM object that has superseded the one
      * to which this instance refers.
      */
-    public final void setForwardedTeleReference(TeleReference forwardedMutableTeleRef) {
+    public final void setForwardedTeleReference(RemoteReference forwardedMutableTeleRef) {
         this.forwardedTeleRef = forwardedMutableTeleRef;
     }
 
+    // TODO (mlvdv) Old Heap
     /**
      * @return reference to the VM object to which this instance refers, possibly following
      * a forwarding reference if set.
      */
-    public final TeleReference getForwardedTeleRef() {
+    @Deprecated
+    public final RemoteReference getForwardedTeleRef() {
         if (forwardedTeleRef != null) {
             return forwardedTeleRef.getForwardedTeleRef();
         }
         return this;
     }
-
-    /**
-     * @return the status of the memory to which this instance refers
-     */
-    public abstract ObjectMemoryStatus memoryStatus();
 
 }

@@ -38,7 +38,6 @@ import com.sun.max.tele.util.*;
 import com.sun.max.tele.value.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
-import com.sun.max.vm.heap.debug.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.type.*;
@@ -148,7 +147,6 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
 
     private static  final int MAX_VM_LOCK_TRIALS = 100;
 
-    // TODO (mlvdv) this may eventually go away, in favor of isObjectOrigin and much  more precise management
     /**
      * Determines whether a location in VM memory is the origin of a VM object.
      *
@@ -157,93 +155,61 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
      * to complete the check, for example if the VM is busy or terminated
      */
     public boolean isValidOrigin(Address address) {
-        if (address.isZero()) {
+        if (address.isZero() || address.equals(zappedMarker)) {
             return false;
         }
-        // TODO (mlvdv) Transition to the new reference management framework; use it for the regions supported so far
-        final VmHeapRegion bootHeapRegion = vm().heap().bootHeapRegion();
-        if (bootHeapRegion.contains(address)) {
-            return bootHeapRegion.objectReferenceManager().isObjectOrigin(address);
+        final VmHeapRegion heapRegion = vm().heap().findHeapRegion(address);
+        if (heapRegion != null) {
+            return heapRegion.objectReferenceManager().isObjectOrigin(address);
         }
-
-        final VmHeapRegion immortalHeapRegion = vm().heap().immortalHeapRegion();
-        if (immortalHeapRegion != null && immortalHeapRegion.contains(address)) {
-            return immortalHeapRegion.objectReferenceManager().isObjectOrigin(address);
-        }
-
         final VmCodeCacheRegion compiledCodeRegion = vm().codeCache().findCodeCacheRegion(address);
         if (compiledCodeRegion != null) {
             return compiledCodeRegion.objectReferenceManager().isObjectOrigin(address);
-        }
-        // For everything else use the old machinery
-        try {
-            if (!heap().contains(address) && (codeCache() == null || !codeCache().contains(address))) {
-                return false;
-            }
-            if (false && heap().isInGC() && heap().containsInDynamicHeap(address)) {
-                //  Assume that any reference to the dynamic heap is invalid during GC.
-                return false;
-            }
-            if (false && vm().bootImage().vmConfiguration.debugging()) {
-                final Pointer cell = Layout.originToCell(address.asPointer());
-                // Checking is easy in a debugging build; there's a special word preceding each object
-                final Word tag = memory().access().getWord(cell, 0, -1);
-                return DebugHeap.isValidCellTag(tag);
-            }
-            // Now check using heuristic to see if there's actually an object stored at the location.
-            return isObjectOriginHeuristic(address);
-        } catch (DataIOError dataAccessError) {
-        } catch (IndexOutOfBoundsException indexOutOfBoundsException) {
         }
         return false;
     }
 
     /**
-     * Determines heuristically whether a location in VM memory is the origin of a VM object, independent
-     * of what region may contain it. May produce rare false positives.
+     * Checks if a location in VM memory could be the origin of an object representation,
+     * determined by examining memory contents using only low-level mechanisms that do
+     * not rely on type information.
+     * <ul>
+     * <li>No discrimination is made regarding the location of the proposed origin;</li>
+     * <li>No discrimination is made relative to the state of any memory management;</li>
+     * <li>Forwarded objects that overwrite the {@code Hub} field are not recognized;</li>
+     * <li><strong>May produce false positives</strong>, in particular when the address is a field
+     * holding a pointer to a {@link Hub};</li>
+     * <li>Uses only <em>unsafe</em> {@link RemoteReference}s, since this predicate is needed for the
+     * construction of legitimate references.</li>
+     * </ul>
      *
-     * @param origin an absolute memory location in the VM.
-     * @return whether there is an object whose origin is at the address, false if unable
-     * to complete the check, for example if the VM is busy or terminated
+     * @param possibleOrigin a legitimate location in VM memory, in the area managed.
+     * @return whether the location is likely to be an object origin.
      */
-    public boolean isObjectOriginHeuristic(Address origin) {
-        if (origin.isZero() || origin.equals(zappedMarker)) {
-            return false;
-        }
-
+    public boolean isPlausibleOriginUnsafe(Address possibleOrigin) {
+        // Assuming we're starting an an object origin. follow hub pointers until the same hub is
+        // traversed twice or an address outside of heap is encountered.
+        //
+        // For all objects other than a {@link StaticTuple}, the maximum chain takes only two hops
+        // find the distinguished object with self-referential hub pointer:  the {@link DynamicHub} for
+        // class {@link DynamicHub}.
+        //
+        //  Typical pattern:    tuple --> dynamicHub of the tuple's class --> dynamicHub of the DynamicHub class
         try {
-            // Check using none of the higher level services in the Inspector,
-            // since this predicate is necessary to build those services.
-            //
-            // This check can produce a false positive, in particular when looking at a field (not in an
-            // object header) that holds a reference to a dynamic hub.
-            //
-            // Keep following hub pointers until the same hub is traversed twice or
-            // an address outside of heap or code region(s) is encountered.
-            //
-            // For all objects other than a {@link StaticTuple}, the maximum chain takes only two hops
-            // find the distinguished object with self-referential hub pointer:  the {@link DynamicHub} for
-            // class {@link DynamicHub}.
-            //
-            //  Typical pattern:    tuple --> dynamicHub of the tuple's class --> dynamicHub of the DynamicHub class
-            Pointer p = origin.asPointer();
-            if (heap().isInGC() && heap().contains(origin) && isObjectForwarded(p)) {
-                p = heap().getForwardedOrigin(p).asPointer();
-            }
-            Word hubWord = Layout.readHubReferenceAsWord(referenceManager().makeTemporaryRemoteReference(p));
+            Word hubWord = Layout.readHubReferenceAsWord(referenceManager().makeUnsafeRemoteReference(possibleOrigin));
             for (int i = 0; i < 3; i++) {
                 if (hubWord.isZero() || hubWord.asAddress().equals(zappedMarker)) {
                     return false;
                 }
-                final RemoteTeleReference hubRef = referenceManager().makeTemporaryRemoteReference(hubWord.asAddress());
-                Pointer hubOrigin = hubRef.toOrigin();
+                final RemoteReference hubRef = referenceManager().makeUnsafeRemoteReference(hubWord.asAddress());
+                Address hubOrigin = hubRef.toOrigin();
+                // Check if the presumed hub is in the heap; it couldn't be elsewhere, for example in the code cache.
                 if (!heap().contains(hubOrigin)) {
                     return false;
                 }
-                if (heap().isInGC() && isObjectForwarded(hubOrigin)) {
-                    hubOrigin = heap().getForwardedOrigin(hubOrigin).asPointer();
-                }
+                // Presume that we have a valid location of a Hub object.
                 final Word nextHubWord = Layout.readHubReferenceAsWord(hubRef);
+                // Does the Hub reference in this object point back to the object itself?
                 if (nextHubWord.equals(hubWord)) {
                     // We arrived at a DynamicHub for the class DynamicHub
                     if (i < 2) {
@@ -252,20 +218,14 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
                     }
                     // This longer chain can only happen when we started with a {@link StaticTuple}.
                     // Perform a more precise test to check for this.
-                    return isStaticTuple(p);
+                    return isStaticTuple(possibleOrigin);
                 }
                 hubWord = nextHubWord;
             }
-//        } catch (TerminatedProcessIOException terminatedProcessIOException) {
-//            return false;
         } catch (DataIOError dataAccessError) {
-            return false;
-        } catch (IndexOutOfBoundsException indexOutOfBoundsException) {
-            return false;
         }
         return false;
     }
-
 
     public TeleObject findTeleObject(Reference reference) throws MaxVMBusyException {
         if (vm().tryLock(MAX_VM_LOCK_TRIALS)) {
@@ -478,20 +438,6 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
         arrayLayout(kind).copyElements(src, srcIndex, dst, dstIndex, length);
     }
 
-    // TODO (mlvdv) this is specific to copying collectors
-    /**
-     * Finds an object in the VM that has been located at a particular place in memory, but which
-     * may have been relocated.
-     * <p>
-     * Must be called in thread holding the VM lock
-     *
-     * @param origin an object origin in the VM
-     * @return the object originally at the origin, possibly relocated
-     */
-    public TeleObject getForwardedObject(Pointer origin) {
-        final Reference forwardedObjectReference = referenceManager().makeReference(heap().getForwardedOrigin(origin));
-        return teleObjectFactory.make(forwardedObjectReference);
-    }
 
     /**
      * Low level predicate for identifying the special case of a {@link StaticTuple} in the VM,
@@ -515,8 +461,8 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
      */
     private boolean isStaticTuple(Address origin) {
         // If this is a {@link StaticTuple} then a field in the header points at a {@link StaticHub}
-        Word staticHubWord = Layout.readHubReferenceAsWord(referenceManager().makeTemporaryRemoteReference(origin));
-        final RemoteTeleReference staticHubRef = referenceManager().makeTemporaryRemoteReference(staticHubWord.asAddress());
+        Word staticHubWord = Layout.readHubReferenceAsWord(referenceManager().makeUnsafeRemoteReference(origin));
+        final RemoteReference staticHubRef = referenceManager().makeUnsafeRemoteReference(staticHubWord.asAddress());
         final Pointer staticHubOrigin = staticHubRef.toOrigin();
         if (!heap().contains(staticHubOrigin) && !codeCache().contains(staticHubOrigin)) {
             return false;
@@ -524,7 +470,7 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
         // If we really have a {@link StaticHub}, then a known field points at a {@link ClassActor}.
         final int hubClassActorOffset = fields().Hub_classActor.fieldActor().offset();
         final Word classActorWord = memory().readWord(staticHubOrigin, hubClassActorOffset);
-        final RemoteTeleReference classActorRef = referenceManager().makeTemporaryRemoteReference(classActorWord.asAddress());
+        final RemoteReference classActorRef = referenceManager().makeUnsafeRemoteReference(classActorWord.asAddress());
         final Pointer classActorOrigin = classActorRef.toOrigin();
         if (!heap().contains(classActorOrigin) && !codeCache().contains(classActorOrigin)) {
             return false;
@@ -532,21 +478,12 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
         // If we really have a {@link ClassActor}, then a known field points at the {@link StaticTuple} for the class.
         final int classActorStaticTupleOffset = fields().ClassActor_staticTuple.fieldActor().offset();
         final Word staticTupleWord = memory().readWord(classActorOrigin, classActorStaticTupleOffset);
-        final RemoteTeleReference staticTupleRef = referenceManager().makeTemporaryRemoteReference(staticTupleWord.asAddress());
+        final RemoteReference staticTupleRef = referenceManager().makeUnsafeRemoteReference(staticTupleWord.asAddress());
         final Pointer staticTupleOrigin = staticTupleRef.toOrigin();
         // If we really started with a {@link StaticTuple}, then this field will point at it
         return staticTupleOrigin.equals(origin);
     }
 
-    public int gcForwardingPointerOffset() {
-        // TODO (mlvdv) Should only be called if in a region being managed by relocating GC
-        return heap().gcForwardingPointerOffset();
-    }
-
-    public  boolean isObjectForwarded(Pointer origin) {
-        // TODO (mlvdv) Should only be called if in a region being managed by relocating GC
-        return heap().isObjectForwarded(origin);
-    }
 
     public void printSessionStats(PrintStream printStream, int indent, boolean verbose) {
         final String indentation = Strings.times(' ', indent);
@@ -573,6 +510,43 @@ public final class VmObjectAccess extends AbstractVmHolder implements TeleVMCach
                 printStream.println("    " + count.value + "\t" + count.type.getSimpleName());
             }
         }
+    }
+
+
+    // TODO (mlvdv) Old Heap
+    /**
+     * Finds an object in the VM that has been located at a particular place in memory, but which
+     * may have been relocated.
+     * <p>
+     * Must be called in thread holding the VM lock
+     *
+     * @param origin an object origin in the VM
+     * @return the object originally at the origin, possibly relocated
+     */
+    @Deprecated
+    public TeleObject getForwardedObject(Pointer origin) {
+        TeleError.unimplemented();
+        return null;
+//        final Reference forwardedObjectReference = referenceManager().makeReference(heap().getForwardedOrigin(origin));
+//        return teleObjectFactory.make(forwardedObjectReference);
+    }
+
+    // TODO (mlvdv) Old Heap
+    @Deprecated
+    public int gcForwardingPointerOffset() {
+        TeleError.unimplemented();
+        return 0;
+        // TODO (mlvdv) Should only be called if in a region being managed by relocating GC
+        //return heap().gcForwardingPointerOffset();
+    }
+
+    // TODO (mlvdv) Old Heap
+    @Deprecated
+    public boolean isObjectForwarded(Pointer origin) {
+        TeleError.unimplemented();
+        return false;
+        // TODO (mlvdv) Should only be called if in a region being managed by relocating GC
+        //return heap().isObjectForwarded(origin);
     }
 
 }

@@ -27,65 +27,72 @@ import java.util.*;
 
 import com.sun.max.tele.*;
 import com.sun.max.tele.interpreter.*;
+import com.sun.max.tele.reference.direct.*;
+import com.sun.max.unsafe.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.reference.Reference;
 
 
 /**
- * Manager for remote references that wrap local objects, allowing them
- * to stand in for objects in the VM.  These are used typically by the
- * remote interpreter.
+ * Manager local objects that are wrapped so that they can substitute for a remote
+ * object via a {@link RemoteReference}. Getting the raw address from such a reference
+ * is unsupported.  The {@link RemoteReferenceScheme} used for remote inspection
+ * handles these references specially.
+ * <p>
+ * These are used typically by the remote interpreter.
  * <p>
  * These references are canonical, and their
- * memory status of these references is permanently {@link ObjectMemoryStatus#LIVE}.
+ * memory status of these references is permanently {@link ObjectStatus#LIVE}.
  *
  * @see Reference
+ * @see RemoteReferenceScheme
  * @see TeleInterpreter
  */
-public final class LocalTeleReferenceManager extends AbstractVmHolder {
+public final class LocalObjectRemoteReferenceManager extends AbstractVmHolder {
 
-    private final Map<Object, WeakReference<LocalTeleReference>> objectToLocalTeleReference = new HashMap<Object, WeakReference<LocalTeleReference>>();
 
-    public LocalTeleReferenceManager(TeleVM vm) {
-      super(vm);
+    private final Map<Object, WeakReference<LocalObjectRemoteReference>> objectToLocalObjectRemoteReference = new HashMap<Object, WeakReference<LocalObjectRemoteReference>>();
+
+    public LocalObjectRemoteReferenceManager(TeleVM vm) {
+        super(vm);
     }
 
     /**
      * Returns a canonicalized reference that encapsulates a local object, disguised as a remote object in the VM.
      */
-    public TeleReference make(Object object) {
+    public RemoteReference make(Object object) {
         if (object == null) {
             return vm().referenceManager().zeroReference();
         }
-        synchronized (objectToLocalTeleReference) {
-            final WeakReference<LocalTeleReference> r = objectToLocalTeleReference.get(object);
+        synchronized (objectToLocalObjectRemoteReference) {
+            final WeakReference<LocalObjectRemoteReference> r = objectToLocalObjectRemoteReference.get(object);
             if (r != null) {
                 return r.get();
             }
-            final LocalTeleReference localTeleReference = new LocalTeleReference(vm(), object);
-            objectToLocalTeleReference.put(object, new WeakReference<LocalTeleReference>(localTeleReference));
+            final LocalObjectRemoteReference localTeleReference = new LocalObjectRemoteReference(vm(), object);
+            objectToLocalObjectRemoteReference.put(object, new WeakReference<LocalObjectRemoteReference>(localTeleReference));
             return localTeleReference;
         }
     }
 
     public int referenceCount() {
-        return objectToLocalTeleReference.size();
+        return objectToLocalObjectRemoteReference.size();
     }
 
     /**
-     * A local object wrapped into a {@link Reference}, allowing it
+     * A local object wrapped into a {@link Remote Reference}, allowing it
      * to stand in for an object in the VM, for example by the
      * remote interpreter.
      * <p>
-     * The memory status is permanently {@link ObjectMemoryStatus#LIVE}.
+     * The memory status is permanently {@link ObjectStatus#LIVE}.
      *
      * @see {@link TeleInterpreter}
      */
-    public final class LocalTeleReference extends TeleReference {
+    public class LocalObjectRemoteReference extends RemoteReference {
 
         private final Object object;
 
-        public LocalTeleReference(TeleVM vm, Object object) {
+        public LocalObjectRemoteReference(TeleVM vm, Object object) {
             super(vm);
             this.object = object;
         }
@@ -95,14 +102,19 @@ public final class LocalTeleReferenceManager extends AbstractVmHolder {
         }
 
         @Override
-        public ObjectMemoryStatus memoryStatus() {
-            return ObjectMemoryStatus.LIVE;
+        public Address raw() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ObjectStatus status() {
+            return ObjectStatus.LIVE;
         }
 
         @Override
         protected void finalize() throws Throwable {
-            synchronized (objectToLocalTeleReference) {
-                objectToLocalTeleReference.remove(object);
+            synchronized (objectToLocalObjectRemoteReference) {
+                objectToLocalObjectRemoteReference.remove(object);
             }
             super.finalize();
         }
@@ -114,8 +126,8 @@ public final class LocalTeleReferenceManager extends AbstractVmHolder {
 
         @Override
         public boolean equals(Object other) {
-            if (other instanceof LocalTeleReference) {
-                final LocalTeleReference localTeleRef = (LocalTeleReference) other;
+            if (other instanceof LocalObjectRemoteReference) {
+                final LocalObjectRemoteReference localTeleRef = (LocalObjectRemoteReference) other;
                 return object == localTeleRef.object();
             }
             return false;
@@ -130,6 +142,7 @@ public final class LocalTeleReferenceManager extends AbstractVmHolder {
         public String toString() {
             return object.toString();
         }
+
     }
 
 }

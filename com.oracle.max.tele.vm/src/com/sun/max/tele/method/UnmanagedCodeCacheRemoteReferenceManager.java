@@ -22,9 +22,12 @@
  */
 package com.sun.max.tele.method;
 
+import java.io.*;
 import java.lang.ref.*;
+import java.text.*;
 import java.util.*;
 
+import com.sun.max.lang.*;
 import com.sun.max.tele.*;
 import com.sun.max.tele.object.*;
 import com.sun.max.tele.object.TeleTargetMethod.CodeCacheReferenceKind;
@@ -50,7 +53,7 @@ import com.sun.max.vm.heap.*;
  * @see VmCodeCacheRegion
  * @see TeleTargetMethod
  */
-final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteReferenceManager {
+final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractVmHolder implements RemoteObjectReferenceManager {
 
     /**
      * The code cache region whose objects are being managed.
@@ -81,17 +84,13 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
         }
     }
 
-    public VmObjectHoldingRegion objectRegion() {
-        return codeCacheRegion;
-    }
-
     /**
      * {@inheritDoc}
      * <p>
      * There is no GC cycle for an unmanaged code cache; object
      * are neither relocated nor collected.
      */
-    public HeapPhase heapPhase() {
+    public HeapPhase phase() {
         return HeapPhase.ALLOCATING;
     }
 
@@ -114,12 +113,17 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
                     if (objectOrigin != null && objectOrigin.equals(origin)) {
                         // The specified location matches one of the target method's pointers.
                         // There should be an object there, but check just in case.
-                        return objects().isObjectOriginHeuristic(objectOrigin);
+                        return objects().isPlausibleOriginUnsafe(objectOrigin);
                     }
                 }
             }
         }
         return false;
+    }
+
+    public Address getForwardingAddressUnsafe(Address origin) throws TeleError {
+        // Objects are not forwarded.
+        return null;
     }
 
     /**
@@ -131,7 +135,7 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
      * If the location is an origin of such an object, return an object reference
      * that indirects through the {@link TargetMethod} that points at the object.
      */
-    public TeleReference makeReference(Address origin) throws TeleError {
+    public RemoteReference makeReference(Address origin) throws TeleError {
         TeleError.check(codeCacheRegion.contains(origin));
         // Locate the compilation, if any, whose code cache allocation in VM memory includes the address
         final TeleCompilation compilation = codeCacheRegion.findCompilation(origin);
@@ -152,7 +156,7 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
         return null;
     }
 
-    public int activeReferenceCount() {
+    private int activeReferenceCount() {
         int count = 0;
         for (CodeCacheReferenceKind kind : CodeCacheReferenceKind.values()) {
             final Map<TeleTargetMethod, WeakReference<UnmanagedCodeCacheRemoteReference> > kindRefMap = refMaps.get(kind);
@@ -168,7 +172,7 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
         return count;
     }
 
-    public int totalReferenceCount() {
+    private int totalReferenceCount() {
         int count = 0;
         for (CodeCacheReferenceKind kind : CodeCacheReferenceKind.values()) {
             count += refMaps.get(kind).size();
@@ -176,10 +180,24 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
         return count;
     }
 
+    public void printObjectSessionStats(PrintStream printStream, int indent, boolean verbose) {
+        final String indentation = Strings.times(' ', indent);
+        printStream.println(indentation + "Object holding region: " + codeCacheRegion.entityName());
+        final NumberFormat formatter = NumberFormat.getInstance();
+        final StringBuilder sb2 = new StringBuilder();
+        final int activeReferenceCount = activeReferenceCount();
+        final int totalReferenceCount = totalReferenceCount();
+        sb2.append("object refs:  active=" + formatter.format(activeReferenceCount));
+        sb2.append(", inactive=" + formatter.format(totalReferenceCount - activeReferenceCount));
+        sb2.append(", mgr=" + getClass().getSimpleName());
+        printStream.println(indentation + sb2.toString());
+    }
+
+
     /**
      * @return a canonical reference of the specified kind for the specified target method
      */
-    private TeleReference makeCanonicalReference(TeleTargetMethod teleTargetMethod, CodeCacheReferenceKind kind) {
+    private RemoteReference makeCanonicalReference(TeleTargetMethod teleTargetMethod, CodeCacheReferenceKind kind) {
         UnmanagedCodeCacheRemoteReference remoteRef = null;
         final Map<TeleTargetMethod, WeakReference<UnmanagedCodeCacheRemoteReference> > kindMap = refMaps.get(kind);
         WeakReference<UnmanagedCodeCacheRemoteReference> weakRef = kindMap.get(teleTargetMethod);
@@ -188,7 +206,7 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
         }
         if (remoteRef == null) {
             // By construction, there should be an object at the location; let's just check.
-            assert objects().isObjectOriginHeuristic(teleTargetMethod.codeCacheObjectOrigin(kind));
+            assert objects().isPlausibleOriginUnsafe(teleTargetMethod.codeCacheObjectOrigin(kind));
             remoteRef = new UnmanagedCodeCacheRemoteReference(vm(), teleTargetMethod, kind);
             kindMap.put(teleTargetMethod, new WeakReference<UnmanagedCodeCacheRemoteReference>(remoteRef));
         }
@@ -217,8 +235,8 @@ final class UnmanagedCodeCacheRemoteReferenceManager extends AbstractRemoteRefer
          * Objects in an unmanaged code cache region are immortal.
          */
         @Override
-        public ObjectMemoryStatus memoryStatus() {
-            return ObjectMemoryStatus.LIVE;
+        public ObjectStatus status() {
+            return ObjectStatus.LIVE;
         }
 
     }

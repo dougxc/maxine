@@ -22,12 +22,29 @@
  */
 package com.sun.max.tele;
 
+import java.util.*;
 
-// TODO (mlvdv)  This will go away with the new memory management framework.
+import com.sun.max.vm.*;
+
+
 /**
- * Access to the special root table allocated in the VM for tracking references
- * using the legacy semi-space collector support.
+ *  Remote inspection support for a particular {@link VMScheme} in the VM.
+ *
+ *  @see VMScheme
  */
-public interface MaxRootsTable extends MaxEntity<MaxRootsTable> {
+public interface RemoteScheme {
+
+    /**
+     * @return the specific scheme being supported
+     */
+    Class schemeClass();
+
+    /**
+     * Identifies methods specific to a particular scheme implementation in the VM, which
+     * can be presented to the user, for example to set predefined breakpoints.
+     *
+     * @return descriptions of methods unique to a specific scheme implementation.
+     */
+    List<MaxCodeLocation> inspectableMethods();
 
 }

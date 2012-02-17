@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,11 +26,11 @@ import com.sun.max.tele.*;
 import com.sun.max.tele.object.*;
 import com.sun.max.unsafe.*;
 
-public abstract class TeleRegionBasedHeapScheme extends AbstractVmHolder implements LegacyTeleHeapScheme{
+public abstract class RemoteRegionBasedHeapScheme extends AbstractRemoteHeapScheme {
 
     protected final TeleRegionTable teleRegionTable;
 
-    public TeleRegionBasedHeapScheme(TeleVM vm) {
+    public RemoteRegionBasedHeapScheme(TeleVM vm) {
         super(vm);
         teleRegionTable = TeleRegionTable.makeTheTeleRegionTable(vm);
     }
@@ -82,14 +82,5 @@ public abstract class TeleRegionBasedHeapScheme extends AbstractVmHolder impleme
                 return objects().makeTeleObject(vm().referenceManager().makeReference(teleRegionTable.regionInfo(regionID).asPointer()));
             }
         };
-    }
-
-    /**
-     * Return heap region tag's name for the specified tag.
-     * @param tag a valid region tag used by this heap scheme
-     * @return a textual representation of the tag, or the empty string if the tag is invalid or if the heap scheme doesn't tag its regions
-     */
-    public String tagName(int tag) {
-        return "";
     }
 }

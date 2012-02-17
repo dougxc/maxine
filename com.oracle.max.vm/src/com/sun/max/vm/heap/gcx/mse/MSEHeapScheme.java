@@ -40,7 +40,6 @@ import com.sun.max.vm.jvmti.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
-import com.sun.max.vm.tele.*;
 import com.sun.max.vm.thread.*;
 
 /**
@@ -164,7 +163,9 @@ public final class MSEHeapScheme extends HeapSchemeWithTLABAdaptor implements He
                 MaxineVM.reportPristineMemoryFailure("reserved space leftover", "deallocate", leftoverSize);
             }
             // Make the heap inspectable
-            InspectableHeapInfo.init(false, heapBounds, heapMarker.memory());
+            HeapScheme.Inspect.init(false);
+            HeapScheme.Inspect.notifyHeapRegions(heapBounds, heapMarker.memory());
+
         } finally {
             disableCustomAllocation();
         }

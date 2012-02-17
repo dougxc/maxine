@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,50 +22,36 @@
  */
 package com.sun.max.tele.object;
 
-import com.sun.max.jdwp.vm.proxy.*;
 import com.sun.max.tele.*;
-import com.sun.max.vm.classfile.constant.*;
 import com.sun.max.vm.reference.*;
 
-/**
- * Canonical surrogate for an object of type {@link String} in the VM.
- */
-public class TeleString extends TeleTupleObject implements StringProvider {
 
-    private String string;
+public class TeleSemiSpaceHeapScheme extends TeleHeapScheme {
 
-    public String getString() {
-        if (status().isNotDeadYet()) {
-            String s = vm().getString(reference());
-            if (s != null) {
-                string = SymbolTable.intern(s);
-            }
+    public TeleSemiSpaceHeapScheme(TeleVM vm, Reference reference) {
+        super(vm, reference);
+    }
+
+    /**
+     * @return surrogate for the semispace collector's "from" region
+     */
+    public TeleLinearAllocationMemoryRegion teleFromRegion() {
+        final Reference fromReference = fields().SemiSpaceHeapScheme_fromSpace.readReference(getReference());
+        if (fromReference != null) {
+            return (TeleLinearAllocationMemoryRegion) objects().makeTeleObject(fromReference);
         }
-        return string;
+        return null;
     }
 
-    protected TeleString(TeleVM vm, Reference stringReference) {
-        super(vm, stringReference);
-    }
-
-    @Override
-    protected Object createDeepCopy(DeepCopier context) {
-        // Translate into local equivalent
-        return getString();
-    }
-
-    @Override
-    public String maxineRole() {
-        return "String";
-    }
-
-    @Override
-    public String maxineTerseRole() {
-        return "String.";
-    }
-
-    public String stringValue() {
-        return getString();
+    /**
+     * @return surrogate for the semispace collector's "to" region
+     */
+    public TeleLinearAllocationMemoryRegion teleToRegion() {
+        final Reference toReference = fields().SemiSpaceHeapScheme_toSpace.readReference(getReference());
+        if (toReference != null) {
+            return (TeleLinearAllocationMemoryRegion) objects().makeTeleObject(toReference);
+        }
+        return null;
     }
 
 }

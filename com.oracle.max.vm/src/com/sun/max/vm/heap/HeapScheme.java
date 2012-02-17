@@ -25,6 +25,7 @@ package com.sun.max.vm.heap;
 import java.lang.management.*;
 
 import com.sun.max.annotate.*;
+import com.sun.max.memory.*;
 import com.sun.max.profile.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.util.*;
@@ -455,6 +456,27 @@ public interface HeapScheme extends VMScheme {
 
         static {
             Heap.registerGCCallback(new GCCallback());
+        }
+
+        /**
+         * Sets up machinery for inspection of heap activity.
+         * <p>
+         * No-op when VM is not being inspected.
+         * @param useImmortalMemory should allocations should be made in immortal memory.
+         */
+        public static void init(boolean useImmortalMemory) {
+            InspectableHeapInfo.init(useImmortalMemory);
+        }
+
+        /**
+         * Announces the collection of memory regions currently being
+         * used for the heap.  This should be called whenever the
+         * collection changes.
+         * <p>
+         * No-op when VM is not being inspected.
+         */
+        public static void notifyHeapRegions(MemoryRegion... memoryRegions) {
+            InspectableHeapInfo.setMemoryRegions(memoryRegions);
         }
 
         /**

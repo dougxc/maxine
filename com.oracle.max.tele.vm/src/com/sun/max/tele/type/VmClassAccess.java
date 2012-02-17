@@ -49,7 +49,7 @@ import com.sun.max.vm.type.*;
  * The singleton cache of information that identifies all classes known to
  * be loaded in the VM.
  * <p>
- * The registry identifies each loaded class with a {@link TeleReference} that points at the {@link ClassActor} for the
+ * The registry identifies each loaded class with a {@link RemoteReference} that points at the {@link ClassActor} for the
  * class in the VM. The registry does <em>not</em> created any instances of {@link TeleClassActor} for them, however, in
  * order to avoid unnecessary overhead.
  * <p>
@@ -169,7 +169,7 @@ public final class VmClassAccess extends AbstractVmHolder implements MaxClasses,
                         for (int j = 0; j != entryArrayLength; j++) {
                             Reference entryRef = referenceManager().makeReference(Layout.getWord(entryArrayRef, j).asAddress());
                             while (!entryRef.isZero()) {
-                                if (entryRef instanceof TemporaryTeleReference && vm.isAttaching()) {
+                                if (entryRef instanceof UnsafeRemoteReference && vm.isAttaching()) {
                                     // this is likely to be a reference in the dynamic heap that we can't see because TeleHeap is not
                                     // fully initialized yet so we add it to a fix-up list and handle it later
                                     attachFixupList.add(entryRef);

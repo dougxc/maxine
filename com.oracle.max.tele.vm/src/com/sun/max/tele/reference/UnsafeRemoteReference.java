@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,20 +24,26 @@ package com.sun.max.tele.reference;
 
 import com.sun.max.tele.*;
 import com.sun.max.unsafe.*;
+import com.sun.max.vm.heap.*;
 
 /**
- * A remote {@link Address} in VM memory, wrapped as if it were a {@link Reference}
- * so that it can be manipulated with standard VM code.
- *
- * @see Reference
- * @see VmReferenceManager
+ * An address in VM memory about which little is known, wrapped
+ * as if it were a legitimate object {@link Reference}, in violation
+ * of the invariant that a {@link Reference} refers to an object.
+ * <p>
+ * This instance is not canonicalized, not GC-safe, and
+ * is intended <strong>only for temporary use</strong>.
+ * <p>
+ * Its memory status is permanently {@link ObjectStatus#DEAD}.
  */
-public abstract class RemoteTeleReference extends TeleReference {
+public final class UnsafeRemoteReference extends ConstantTeleReference {
 
-    protected RemoteTeleReference(TeleVM vm) {
-        super(vm);
+    UnsafeRemoteReference(TeleVM vm, Address raw) {
+        super(vm, raw);
     }
 
-    public abstract Address raw();
-
+    @Override
+    public ObjectStatus status() {
+        return ObjectStatus.DEAD;
+    }
 }

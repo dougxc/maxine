@@ -329,7 +329,7 @@ public final class TeleTargetMethod extends TeleRuntimeMemoryRegion implements T
                 codeByteArrayOrigin = reference().readWord(fields().TargetMethod_code.fieldActor().offset()).asAddress();
                 // Get the absolute location of all target code bytes.
                 // Use low level machinery; we don't want to create a {@link TeleObject} for every one of them.
-                final RemoteTeleReference codeByteArrayRef = referenceManager().makeTemporaryRemoteReference(codeByteArrayOrigin);
+                final RemoteReference codeByteArrayRef = referenceManager().makeUnsafeRemoteReference(codeByteArrayOrigin);
                 final int length = objects().unsafeReadArrayLength(codeByteArrayRef);
                 codeStartAddress = objects().unsafeArrayIndexToAddress(Kind.BYTE, codeByteArrayOrigin, 0);
                 codeEndAddress = objects().unsafeArrayIndexToAddress(Kind.BYTE, codeByteArrayOrigin, length);
@@ -397,7 +397,7 @@ public final class TeleTargetMethod extends TeleRuntimeMemoryRegion implements T
      * permanently unused by the VM.
      */
     public boolean isCodeEvicted() {
-        return !isLive() || isCodeEvicted;
+        return status().isDead() || isCodeEvicted;
     }
 
     /**

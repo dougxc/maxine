@@ -229,6 +229,16 @@ public abstract class TeleVM implements MaxVM {
     private static File vmDirectory;
 
     /**
+     * The VM object that represents the VM itself.
+     */
+    private static TeleMaxineVM teleMaxineVM;
+
+    /**
+     * The VM object that holds configuration information, including scheme implementations.
+     */
+    private static TeleVMConfiguration teleVMConfiguration;
+
+    /**
      * An abstraction description of the VM's platform, suitable for export.
      */
     private VmPlatform platform;
@@ -237,6 +247,20 @@ public abstract class TeleVM implements MaxVM {
      * If {@code true}, always prompt for native code frame view when entering native code.
      */
     public static boolean promptForNativeCodeView;
+
+    /**
+     * Interface for notification that all of the initialization for a remote inspection session
+     * are substantially complete; some services have needs for setup that can only happen very
+     * late, most notably anything that requires setting a breakpoint.
+     */
+    public interface InitializationListener {
+
+        /**
+         * Notifies listener that all of the remote inspection services are substantially complete,
+         * and that it is safe to use them, for example setting breakpoints.
+         */
+        void initialiationComplete(long epoch);
+    }
 
     /**
      * The options controlling how a VM instance is {@linkplain #newAllocator(String...) created}.
@@ -456,6 +480,7 @@ public abstract class TeleVM implements MaxVM {
                 vm.updateVMCaches(0L);
         }
 
+
         final File commandFile = options.commandFileOption.getValue();
         if (commandFile != null && !commandFile.equals("")) {
             vm.executeCommandsFromFile(commandFile.getPath());
@@ -615,6 +640,8 @@ public abstract class TeleVM implements MaxVM {
      * for access by client methods on any thread.
      */
     private volatile TeleVMState teleVMState;
+
+    private List<InitializationListener> initializationListeners = new ArrayList<InitializationListener>();
 
     private List<MaxVMStateListener> vmStateListeners = new CopyOnWriteArrayList<MaxVMStateListener>();
 
@@ -843,6 +870,10 @@ public abstract class TeleVM implements MaxVM {
 
                 nativeCodeAccess = new NativeCodeAccess(this);
 
+
+                teleMaxineVM = (TeleMaxineVM) objects().makeTeleObject(fields().MaxineVM_vm.readReference(this));
+                teleVMConfiguration = teleMaxineVM.teleVMConfiguration();
+
                 if (isAttaching()) {
                     // Check that the target was run with option MakeInspectable otherwise the dynamic heap info will not be available
                     TeleError.check((fields().Inspectable_flags.readInt(this) & Inspectable.INSPECTED) != 0, "target VM was not run with -XX:+MakeInspectable option");
@@ -851,6 +882,12 @@ public abstract class TeleVM implements MaxVM {
 
                 // read the list of actual VmThreadLocal values from the target
                 TeleThreadLocalsArea.Static.values(this);
+
+                // At this point everything should be read to go; handle any requests
+                // for late initialization.
+                for (InitializationListener listener : initializationListeners) {
+                    listener.initialiationComplete(epoch);
+                }
             }
 
             // The standard update cycle follows; it is sensitive to ordering.
@@ -914,8 +951,7 @@ public abstract class TeleVM implements MaxVM {
     }
 
     public final TeleObject representation() {
-        // No distinguished object in VM runtime represents the VM.
-        return null;
+        return teleMaxineVM;
     }
 
     public final String getVersion() {
@@ -1003,6 +1039,15 @@ public abstract class TeleVM implements MaxVM {
     }
 
     /**
+     * Register an action that will take place once, all of the initialization for a remote inspection session
+     * are substantially complete; some services have needs for setup that can only happen very
+     * late, most notably anything that requires setting a breakpoint.
+     */
+    public final void addInitializationListener(InitializationListener initializationListener) {
+        initializationListeners.add(initializationListener);
+    }
+
+    /**
      * Returns the most recently notified VM state.  Note that this
      * isn't updated until the very end of a refresh cycle after VM
      * halt, so it should be considered out of date until the refresh
@@ -1026,31 +1071,55 @@ public abstract class TeleVM implements MaxVM {
         vmStateListeners.remove(listener);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Registering this listener will cause one or more breakpoints to be created, if they don't exist,
+     * so this must be called after all the other inspection services are in place.
+     */
     public final void addGCPhaseListener(MaxGCPhaseListener listener, HeapPhase phase) throws MaxVMBusyException {
-        switch (phase) {
-            case ANALYZING:
-                gcAnalyzingListeners.add(listener, teleProcess);
-                break;
-            case RECLAIMING:
-                gcReclaimingListeners.add(listener, teleProcess);
-                break;
-            case ALLOCATING:
-                gcAllocatingListeners.add(listener, teleProcess);
-                break;
+        if (phase == null) {
+            gcAnalyzingListeners.add(listener, teleProcess);
+            gcReclaimingListeners.add(listener, teleProcess);
+            gcAllocatingListeners.add(listener, teleProcess);
+        } else {
+            switch (phase) {
+                case ANALYZING:
+                    gcAnalyzingListeners.add(listener, teleProcess);
+                    break;
+                case RECLAIMING:
+                    gcReclaimingListeners.add(listener, teleProcess);
+                    break;
+                case ALLOCATING:
+                    gcAllocatingListeners.add(listener, teleProcess);
+                    break;
+            }
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Registering this listener will cause one or more breakpoints to be created, if they don't exist,
+     * so this must be called after all the other inspection services are in place.
+     */
     public final void removeGCPhaseListener(MaxGCPhaseListener listener, HeapPhase phase) throws MaxVMBusyException {
-        switch (phase) {
-            case ANALYZING:
-                gcAnalyzingListeners.remove(listener);
-                break;
-            case RECLAIMING:
-                gcReclaimingListeners.remove(listener);
-                break;
-            case ALLOCATING:
-                gcAllocatingListeners.remove(listener);
-                break;
+        if (phase == null) {
+            gcAnalyzingListeners.remove(listener);
+            gcReclaimingListeners.remove(listener);
+            gcAllocatingListeners.remove(listener);
+        } else {
+            switch (phase) {
+                case ANALYZING:
+                    gcAnalyzingListeners.remove(listener);
+                    break;
+                case RECLAIMING:
+                    gcReclaimingListeners.remove(listener);
+                    break;
+                case ALLOCATING:
+                    gcAllocatingListeners.remove(listener);
+                    break;
+            }
         }
     }
 
@@ -1253,7 +1322,7 @@ public abstract class TeleVM implements MaxVM {
             threadsDied,
             breakpointEvents,
             watchpointEvent,
-            heapAccess.isInGC(), codeCacheAccess.isInEviction(), teleVMState);
+            heapAccess.phase(), codeCacheAccess.isInEviction(), teleVMState);
         for (final MaxVMStateListener listener : vmStateListeners) {
             listener.stateChanged(teleVMState);
         }
@@ -1342,9 +1411,9 @@ public abstract class TeleVM implements MaxVM {
         // Work only with temporary references that are unsafe across GC
         // Do no testing to determine if the reference points to a valid String object in live memory.
         try {
-            final RemoteTeleReference stringRef = referenceManager().makeTemporaryRemoteReference(origin);
+            final RemoteReference stringRef = referenceManager().makeUnsafeRemoteReference(origin);
             final Address charArrayAddress = stringRef.readWord(fields().String_value.fieldActor().offset()).asAddress();
-            final RemoteTeleReference charArrayRef = referenceManager().makeTemporaryRemoteReference(charArrayAddress);
+            final RemoteReference charArrayRef = referenceManager().makeUnsafeRemoteReference(charArrayAddress);
             int offset = stringRef.readInt(fieldAccess.String_offset.fieldActor().offset());
             final int charArrayCount = stringRef.readInt(fieldAccess.String_count.fieldActor().offset());
             final char[] chars = new char[charArrayCount];
@@ -1395,20 +1464,6 @@ public abstract class TeleVM implements MaxVM {
         } catch (Exception exception) {
             throw new IOException(exception);
         }
-        try {
-            addGCPhaseListener(new MaxGCPhaseListener() {
-                // The purpose of this listener, which doesn't do anything explicitly,
-                // is to force a VM stop at the end of each GC cycle, even if there are
-                // no other listeners.  This presents an opportunity for the Reference/Object
-                // code to update heap-related information that may have been changed as
-                // a result of the GC.
-                public void gcPhaseChange(HeapPhase phase) {
-                    Trace.line(TRACE_VALUE, tracePrefix() + "GC complete");
-                }
-            }, HeapPhase.ALLOCATING);
-        } catch (MaxVMBusyException maxVMBusyException) {
-            TeleError.unexpected("Unable to set initial GC completed listener");
-        }
     }
 
     public final Value interpretMethod(ClassMethodActor classMethodActor, Value... arguments) throws InvocationTargetException {
@@ -1458,6 +1513,13 @@ public abstract class TeleVM implements MaxVM {
 
     public final void executeCommandsFromFile(String fileName) {
         FileCommands.executeCommandsFromFile(this, fileName);
+    }
+
+    /**
+     * @return the VM object that hold configuration information.
+     */
+    public final TeleVMConfiguration teleVMConfiguration() {
+        return teleVMConfiguration;
     }
 
     //

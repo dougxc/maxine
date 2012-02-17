@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,32 @@
  */
 package com.sun.max.tele.object;
 
-import java.io.*;
-import java.text.*;
-
-import com.sun.max.lang.*;
 import com.sun.max.tele.*;
+import com.sun.max.vm.reference.*;
 
-public abstract class AbstractRemoteReferenceManager extends AbstractVmHolder implements RemoteObjectReferenceManager {
 
-    public AbstractRemoteReferenceManager(TeleVM vm) {
-        super(vm);
+/**
+ * Local surrogate for the distinguished object int the VM that represents the VM itself.
+ */
+public final class TeleMaxineVM extends TeleTupleObject {
+
+    TeleVMConfiguration teleVMConfiguration;
+
+    public TeleMaxineVM(TeleVM vm, Reference reference) {
+        super(vm, reference);
     }
 
-    public final void printSessionStats(PrintStream printStream, int indent, boolean verbose) {
-        final String indentation = Strings.times(' ', indent);
-        final NumberFormat formatter = NumberFormat.getInstance();
-        final StringBuilder sb2 = new StringBuilder();
-        final int activeReferenceCount = activeReferenceCount();
-        final int totalReferenceCount = totalReferenceCount();
-        sb2.append("object refs:  active=" + formatter.format(activeReferenceCount));
-        sb2.append(", inactive=" + formatter.format(totalReferenceCount - activeReferenceCount));
-        sb2.append(", mgr=" + getClass().getSimpleName());
-        printStream.println(indentation + sb2.toString());
+    /**
+     * @return the VM object that holds configuration information for the particular VM build.
+     */
+    public TeleVMConfiguration teleVMConfiguration() {
+        if (teleVMConfiguration == null) {
+            final Reference configReference = fields().MaxineVM_config.readReference(getReference());
+            if (configReference != null) {
+                teleVMConfiguration = (TeleVMConfiguration) objects().makeTeleObject(configReference);
+            }
+        }
+        return teleVMConfiguration;
     }
 
 }
