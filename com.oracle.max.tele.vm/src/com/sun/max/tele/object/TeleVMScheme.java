@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,24 +20,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.max.tele.reference;
+package com.sun.max.tele.object;
 
 import com.sun.max.tele.*;
-import com.sun.max.unsafe.*;
+import com.sun.max.vm.*;
+import com.sun.max.vm.reference.*;
+
 
 /**
- * A remote {@link Address} in VM memory, wrapped as if it were a {@link Reference}
- * so that it can be manipulated with standard VM code.
+ * Represents all implementations of schemes in the VM.
  *
- * @see Reference
- * @see VmReferenceManager
+ * @see VMScheme
  */
-public abstract class RemoteTeleReference extends TeleReference {
+public abstract class TeleVMScheme extends TeleTupleObject {
 
-    protected RemoteTeleReference(TeleVM vm) {
-        super(vm);
+    public TeleVMScheme(TeleVM vm, Reference reference) {
+        super(vm, reference);
     }
 
-    public abstract Address raw();
+    public abstract String schemeName();
 
 }

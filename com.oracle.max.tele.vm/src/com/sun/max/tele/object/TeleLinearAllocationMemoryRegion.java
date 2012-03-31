@@ -99,6 +99,7 @@ public class TeleLinearAllocationMemoryRegion extends TeleRuntimeMemoryRegion {
         try {
             final Reference markReference = fields().LinearAllocationMemoryRegion_mark.readReference(reference());
             markCache = markReference.readWord(AtomicWord.valueOffset()).asPointer();
+            // This essentially marks the usage cache as dirty.
             usageCache = MaxMemoryRegion.Util.NULL_MEMORY_USAGE;
         } catch (DataIOError dataIOError) {
             // No update; data read failed for some reason other than VM availability

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,30 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.max.tele.reference;
+package com.sun.max.tele;
 
-import com.sun.max.tele.*;
-import com.sun.max.unsafe.*;
-import com.sun.max.vm.heap.*;
+import java.util.*;
+
+import com.sun.max.vm.*;
+
 
 /**
- * An address in VM memory about which little is known, wrapped
- * as if it were a legitimate object {@link Reference}, in violation
- * of the invariant that a {@link Reference} refers to an object.
- * <p>
- * This instance is not canonicalized, not GC-safe, and
- * is intended <strong>only for temporary use</strong>.
- * <p>
- * Its memory status is permanently {@link ObjectMemoryStatus#DEAD}.
+ *  Remote inspection support for a particular {@link VMScheme} in the VM.
+ *
+ *  @see VMScheme
  */
-public final class TemporaryTeleReference extends ConstantTeleReference {
+public interface RemoteScheme {
 
-    TemporaryTeleReference(TeleVM vm, Address raw) {
-        super(vm, raw);
-    }
+    /**
+     * @return the specific scheme being supported
+     */
+    Class schemeClass();
 
-    @Override
-    public ObjectMemoryStatus memoryStatus() {
-        return ObjectMemoryStatus.DEAD;
-    }
+    /**
+     * Identifies methods specific to a particular scheme implementation in the VM, which
+     * can be presented to the user, for example to set predefined breakpoints.
+     *
+     * @return descriptions of methods unique to a specific scheme implementation.
+     */
+    List<MaxCodeLocation> inspectableMethods();
+
 }

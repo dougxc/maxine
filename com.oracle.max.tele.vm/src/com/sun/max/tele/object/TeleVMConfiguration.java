@@ -20,14 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.max.tele;
+package com.sun.max.tele.object;
+
+import com.sun.max.tele.*;
+import com.sun.max.vm.reference.*;
 
 
-// TODO (mlvdv)  This will go away with the new memory management framework.
-/**
- * Access to the special root table allocated in the VM for tracking references
- * using the legacy semi-space collector support.
- */
-public interface MaxRootsTable extends MaxEntity<MaxRootsTable> {
+public final class TeleVMConfiguration extends TeleTupleObject {
 
+    private TeleHeapScheme teleHeapScheme;
+
+    public TeleVMConfiguration(TeleVM vm, Reference reference) {
+        super(vm, reference);
+    }
+
+    public TeleHeapScheme teleHeapScheme() {
+        if (teleHeapScheme == null) {
+            final Reference heapSchemeReference = fields().VMConfiguration_heapScheme.readReference(getReference());
+            teleHeapScheme = (TeleHeapScheme) objects().makeTeleObject(heapSchemeReference);
+        }
+        return teleHeapScheme;
+    }
 }

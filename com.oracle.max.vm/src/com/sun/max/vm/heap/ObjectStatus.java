@@ -24,15 +24,13 @@ package com.sun.max.vm.heap;
 
 import java.util.*;
 
-//TODO (mlvdv) articulate behavior with respect to relocated/forwarded objects.
 /**
  * The status of an object in the VM, or more precisely the status of the region of memory
- * in which an object's state is or was represented.
+ * in which an object's state is or might have been represented.
  * <ul>
  * <li> {@link #LIVE}: Determined to be reachable as of the most recent collection</li>
  * <li> {@link #UNKNOWN}: During liveness analysis:  formerly live, not yet determined reachable</li>
- * <li> {@link #DEAD}: Determined unreachable; no further assumptions about memory may be made</li>
- * <li> {@link #FORWARDED}: a possibly obsolete status, may be removed</li>
+ * <li> {@link #DEAD}: Unreachable object; no assumptions about memory may be made</li>
  * </ul>
  * <p>
  * Possible transitions:
@@ -45,7 +43,7 @@ import java.util.*;
  * it becomes certain that an object is unreachable;</li>
  * </ul>
  */
-public enum ObjectMemoryStatus {
+public enum ObjectStatus {
 
     /**
      * The region of memory is in a live allocation area and represents an object
@@ -62,18 +60,12 @@ public enum ObjectMemoryStatus {
     /**
      * The region of memory formerly represented an object that has been collected.
      */
-    DEAD("Dead", "The region of memory formerly represented an object that has been collected"),
-
-    /**
-     * The region of memory formerly represented an object that has been moved to another location.
-     * This status is possibly obsolete and may be removed.
-     */
-    FORWARDED("Forwarded", "An object that has been moved to another location");
+    DEAD("Dead", "The region of memory formerly represented an object that has been collected");
 
     private final String label;
     private final String description;
 
-    private ObjectMemoryStatus(String label, String description) {
+    private ObjectStatus(String label, String description) {
         this.label = label;
         this.description = description;
     }
@@ -87,46 +79,43 @@ public enum ObjectMemoryStatus {
     }
 
     /**
-     * Does the memory represent an object that is currently assumed
-     * to be reachable?
+     * Does the memory represent an object that is currently assumed to be reachable?
+     *
+     * @return {@code this == } {@link #LIVE}.
      */
     public boolean isLive() {
         return this == LIVE;
     }
 
     /**
-     * (During liveness analysis only) Has the formerly live object
-     * not yet been determined to be reachable?
+     * Does the memory represent an object that we treat provisionally as reachable: either {@link #LIVE} or
+     * {@link #UNKNOWN}.
+     *
+     * @return {@code this != } {@link #DEAD}.
+     */
+    public boolean isNotDead() {
+        return this != DEAD;
+    }
+
+    /**
+     * During liveness analysis only, has the formerly live object not yet been determined to be reachable?
+     * Always returns {@code false} during other GC phases.
+     *
+     * @return {@code this == } {@link #UNKNOWN}.
      */
     public boolean isUnknown() {
         return this == UNKNOWN;
     }
 
     /**
-     * Should he object be presumed live until further notice (either
-     * live or (during liveness analysis only) not yet determined to
-     * be dead?
-     */
-    public boolean isNotDeadYet() {
-        return this == LIVE || this == UNKNOWN;
-    }
-
-    /**
-     * Does the memory contain a copy of an object in the VM
-     * that has been abandoned after relocation by GC.
-     */
-    public boolean isForwarded() {
-        return this == FORWARDED;
-    }
-
-    /**
-     * Has the object represented by the memory been determined
-     * to be unreachable?
+     * Has the object represented by the memory been determined to be unreachable?
+     *
+     * @return {@code this == } {@link #DEAD}.
      */
     public boolean isDead() {
         return this == DEAD;
     }
 
-    public static final List<ObjectMemoryStatus> VALUES = Arrays.asList(values());
+    public static final List<ObjectStatus> VALUES = Arrays.asList(values());
 
 }

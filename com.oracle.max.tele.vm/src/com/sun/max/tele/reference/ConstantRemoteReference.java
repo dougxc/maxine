@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,21 +26,20 @@ import com.sun.max.tele.*;
 import com.sun.max.unsafe.*;
 
 /**
- * A fixed, remote {@link Address} in VM memory, wrapped as if it were a {@link Reference}
- * so that it can be manipulated with standard VM code.
- * <p>
+ * A reference to an object in the VM whose location and status never change.
+ *
  * Equality for instances is defined as {@link Address} equality with other instances of the class.
  *
  * @see Reference
  * @see VmReferenceManager
  */
-public abstract class ConstantTeleReference extends RemoteTeleReference {
+public abstract class ConstantRemoteReference extends RemoteReference {
 
-    private final Address raw;
+    private final Address origin;
 
-    protected ConstantTeleReference(TeleVM vm, Address rawRef) {
+    protected ConstantRemoteReference(TeleVM vm, Address origin) {
         super(vm);
-        raw = rawRef;
+        this.origin = origin;
     }
 
     /**
@@ -49,27 +48,52 @@ public abstract class ConstantTeleReference extends RemoteTeleReference {
      * In this implementation, the remote location does not change, so this method is constant.
      */
     @Override
-    public Address raw() {
-        return raw;
+    public final Address origin() {
+        return origin;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * These objects never move, and so are never <em>forwarded</em>.
+     */
+    @Override
+    public boolean isForwarded() {
+        return false;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * These objects never move, and so are never <em>forwarded</em>.
+     */
+    @Override
+    public Address forwardedFrom() {
+        return Address.zero();
     }
 
     @Override
-    public boolean equals(Object other) {
-        if (other instanceof ConstantTeleReference) {
-            final ConstantTeleReference constantTeleRef = (ConstantTeleReference) other;
-            return raw.equals(constantTeleRef.raw);
+    public String gcDescription() {
+        return "object in an unmanaged region";
+    }
+
+    @Override
+    public final boolean equals(Object other) {
+        if (other instanceof ConstantRemoteReference) {
+            final ConstantRemoteReference constantTeleRef = (ConstantRemoteReference) other;
+            return origin.equals(constantTeleRef.origin);
         }
         return false;
     }
 
     @Override
-    public int hashCode() {
-        return raw.toInt();
+    public final int hashCode() {
+        return origin.toInt();
     }
 
     @Override
     public String toString() {
-        return raw().toString();
+        return origin().toString();
     }
 
 }
