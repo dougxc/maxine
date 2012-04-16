@@ -42,7 +42,8 @@ import com.sun.max.vm.runtime.*;
  *
  * @see SemiSpaceHeapScheme
  */
-final class TeleSemiSpaceHeapScheme extends AbstractVmHolder implements TeleHeapScheme {
+@Deprecated
+final class TeleSemiSpaceHeapScheme extends AbstractVmHolder implements LegacyTeleHeapScheme {
 
     TeleSemiSpaceHeapScheme(TeleVM vm) {
         super(vm);
@@ -65,7 +66,7 @@ final class TeleSemiSpaceHeapScheme extends AbstractVmHolder implements TeleHeap
                     // The location is not in any memory region allocated by the heap.
                     return MaxMemoryStatus.UNKNOWN;
                 }
-                if (heap().isInGC()) {
+                if (heap().phase().isCollecting()) {
                     // Don't quibble if we're in a GC, as long as the address is in either the To or From regions.
                     return MaxMemoryStatus.LIVE;
                 }

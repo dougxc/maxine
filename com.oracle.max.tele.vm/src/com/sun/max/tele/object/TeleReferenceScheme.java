@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,33 +20,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.max.tele.reference;
+package com.sun.max.tele.object;
 
 import com.sun.max.tele.*;
-import com.sun.max.unsafe.*;
-import com.sun.max.vm.heap.*;
+import com.sun.max.vm.reference.*;
 
-// TODO (mlvdv) this will eventually be replaced.
 
 /**
- * Canonicalized constant remote {@link Reference}, for addresses of VM objects
- * that do not move and will not be collected.
+ * Supertype for all implementations of VM references.
+ *
+ * @see ReferenceScheme
  */
-public class CanonicalConstantTeleReference extends ConstantTeleReference {
+public class TeleReferenceScheme extends TeleVMScheme {
 
-    CanonicalConstantTeleReference(TeleVM vm, Address raw) {
-        super(vm, raw);
-    }
-
-    // TODO (mlvdv) review whether this is necessary.
-    @Override
-    public void finalize() throws Throwable {
-        vm().referenceManager().finalizeCanonicalConstantTeleReference(this);
-        super.finalize();
+    public TeleReferenceScheme(TeleVM vm, Reference reference) {
+        super(vm, reference);
     }
 
     @Override
-    public ObjectMemoryStatus memoryStatus() {
-        return ObjectMemoryStatus.LIVE;
+    public String schemeName() {
+        return ReferenceScheme.class.getSimpleName();
     }
+
 }

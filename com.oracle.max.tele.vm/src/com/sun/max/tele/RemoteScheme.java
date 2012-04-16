@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,24 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.max.tele.reference;
+package com.sun.max.tele;
 
-import com.sun.max.tele.*;
-import com.sun.max.unsafe.*;
+import java.util.*;
+
+import com.sun.max.vm.*;
+
 
 /**
- * A remote {@link Address} in VM memory, wrapped as if it were a {@link Reference}
- * so that it can be manipulated with standard VM code.
+ *  Remote inspection support for a particular {@link VMScheme} in the VM.
  *
- * @see Reference
- * @see VmReferenceManager
+ *  @see VMScheme
  */
-public abstract class RemoteTeleReference extends TeleReference {
+public interface RemoteScheme {
 
-    protected RemoteTeleReference(TeleVM vm) {
-        super(vm);
-    }
+    /**
+     * @return the specific scheme being supported
+     */
+    Class schemeClass();
 
-    public abstract Address raw();
+    /**
+     * Identifies methods specific to a particular scheme implementation in the VM, which
+     * can be presented to the user, for example to set predefined breakpoints.
+     *
+     * @return descriptions of methods unique to a specific scheme implementation.
+     */
+    List<MaxCodeLocation> inspectableMethods();
 
 }

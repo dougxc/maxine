@@ -43,7 +43,6 @@ import com.sun.max.vm.heap.gcx.rset.ctbl.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
-import com.sun.max.vm.tele.*;
 import com.sun.max.vm.thread.*;
 
 
@@ -259,8 +258,10 @@ final public class GenMSEHeapScheme extends HeapSchemeWithTLABAdaptor  implement
             }
 
             cardTableRSet.initializeXirStartupConstants();
+
              // Make the heap inspectable
-            InspectableHeapInfo.init(false, heapBounds, heapMarker.colorMap, cardTableRSet.memory());
+            HeapScheme.Inspect.init(false);
+            HeapScheme.Inspect.notifyHeapRegions(heapBounds, heapMarker.memory(), cardTableRSet.memory());
         } finally {
             disableCustomAllocation();
         }
@@ -311,7 +312,7 @@ final public class GenMSEHeapScheme extends HeapSchemeWithTLABAdaptor  implement
             oldSpace.doAfterGC();
             youngSpaceEvacuator.doAfterGC();
             fullCollectionCount++;
-            HeapScheme.Inspect.notifyHeapPhaseChange(HeapPhase.ALLOCATING);
+            HeapScheme.Inspect.notifyHeapPhaseChange(HeapPhase.MUTATING);
         }
 
         @Override

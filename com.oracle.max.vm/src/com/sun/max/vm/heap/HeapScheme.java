@@ -25,6 +25,7 @@ package com.sun.max.vm.heap;
 import java.lang.management.*;
 
 import com.sun.max.annotate.*;
+import com.sun.max.memory.*;
 import com.sun.max.profile.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.util.*;
@@ -442,19 +443,25 @@ public interface HeapScheme extends VMScheme {
      */
     public static final class Inspect {
 
-        private static class GCCallback implements Heap.GCCallback{
-
-            public void gcCallback(Heap.GCCallbackPhase gcCallbackPhase) {
-                if (gcCallbackPhase == Heap.GCCallbackPhase.BEFORE) {
-                    notifyHeapPhaseChange(HeapPhase.ANALYZING);
-                } else if (gcCallbackPhase == Heap.GCCallbackPhase.AFTER) {
-                    notifyHeapPhaseChange(HeapPhase.ALLOCATING);
-                }
-            }
+        /**
+         * Sets up machinery for inspection of heap activity.
+         * <p>
+         * No-op when VM is not being inspected.
+         * @param useImmortalMemory should allocations should be made in immortal memory.
+         */
+        public static void init(boolean useImmortalMemory) {
+            InspectableHeapInfo.init(useImmortalMemory);
         }
 
-        static {
-            Heap.registerGCCallback(new GCCallback());
+        /**
+         * Announces the collection of memory regions currently being
+         * used for the heap.  This should be called whenever the
+         * collection changes.
+         * <p>
+         * No-op when VM is not being inspected.
+         */
+        public static void notifyHeapRegions(MemoryRegion... memoryRegions) {
+            InspectableHeapInfo.setMemoryRegions(memoryRegions);
         }
 
         /**
@@ -463,7 +470,7 @@ public interface HeapScheme extends VMScheme {
          * <p>
          * It is assumed that the heap pass through the three phases in the following order:
          * <ol>
-         * <li>{@link HeapPhase#ALLOCATING}: this is the initial phase, and a transition
+         * <li>{@link HeapPhase#MUTATING}: this is the initial phase, and a transition
          * into this phase is taken to be the conclusion of a GC.</li>
          * <li>{@link HeapPhase#ANALYZING}: a transition into this phase is taken to be
          * the beginning of a GC.</li>
@@ -480,7 +487,7 @@ public interface HeapScheme extends VMScheme {
                 case RECLAIMING:
                     inspectableGCReclaiming();
                     break;
-                case ALLOCATING:
+                case MUTATING:
                     inspectableGCCompleted();
                     break;
             }
@@ -577,7 +584,7 @@ public interface HeapScheme extends VMScheme {
 
         /**
          * An empty method whose purpose is to be interrupted by the Inspector
-         * at the conclusions of a GC, i.e. when the phase has just changed back to {@link HeapPhase#ALLOCATING}.
+         * at the conclusions of a GC, i.e. when the phase has just changed back to {@link HeapPhase#MUTATING}.
          * <p>
          * This particular method is intended for use by users of the Inspector, and
          * is distinct from a method used by the Inspector for internal use.

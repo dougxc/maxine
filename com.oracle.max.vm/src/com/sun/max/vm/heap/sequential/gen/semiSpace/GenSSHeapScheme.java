@@ -208,8 +208,10 @@ public final class GenSSHeapScheme extends HeapSchemeWithTLABAdaptor implements 
 
 
         cardTableRSet.initializeXirStartupConstants();
+
         // Make the heap inspectable
-        InspectableHeapInfo.init(false, youngSpace.space, oldSpace.space, oldSpace.fromSpace, cardTableRSet.memory());
+        HeapScheme.Inspect.init(true);
+        HeapScheme.Inspect.notifyHeapRegions(youngSpace.space, oldSpace.space, oldSpace.fromSpace, cardTableRSet.memory());
     }
 
     @Override
