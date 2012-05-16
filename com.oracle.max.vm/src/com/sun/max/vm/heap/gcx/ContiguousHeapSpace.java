@@ -24,6 +24,7 @@ package com.sun.max.vm.heap.gcx;
 
 import static com.sun.max.platform.Platform.*;
 
+import com.sun.max.annotate.*;
 import com.sun.max.memory.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
@@ -34,8 +35,11 @@ import com.sun.max.vm.runtime.*;
  * Contiguous heap storage backed up by reserved contiguous
  * virtual memory.
  */
-public class ContiguousHeapSpace extends MemoryRegion {
+public class ContiguousHeapSpace extends MemoryRegion implements EvacuatingSpace {
+
+    @INSPECTED
     private Address committedEnd;
+
     public ContiguousHeapSpace() {
         super();
         committedEnd = start;
@@ -82,13 +86,28 @@ public class ContiguousHeapSpace extends MemoryRegion {
         return pageAlignedGrowth;
     }
 
-    public boolean growCommittedSpace(Size growth) {
-        Address newCommittedEnd = committedEnd.plus(growth);
+    public boolean growCommittedSpace(Size delta) {
+        Address newCommittedEnd = committedEnd.plus(delta);
         if (MaxineVM.isDebug()) {
             FatalError.check(newCommittedEnd.lessEqual(end()), "Cannot grow beyond reserved space");
-            FatalError.check(growth.isAligned(platform().pageSize), "Heap Growth must be page-aligned");
+            FatalError.check(delta.isAligned(platform().pageSize), "Heap Growth must be page-aligned");
         }
-        if (VirtualMemory.commitMemory(committedEnd, growth, VirtualMemory.Type.HEAP)) {
+        final boolean committed = Heap.AvoidsAnonOperations || VirtualMemory.commitMemory(committedEnd, delta, VirtualMemory.Type.HEAP);
+        if (committed) {
+            committedEnd = newCommittedEnd;
+            return true;
+        }
+        return false;
+    }
+
+    public boolean shrinkCommittedSpace(Size delta) {
+        Address newCommittedEnd = committedEnd.minus(delta);
+        if (MaxineVM.isDebug()) {
+            FatalError.check(newCommittedEnd.greaterEqual(start()), "Cannot shrink more than committed space");
+            FatalError.check(delta.isAligned(platform().pageSize), "Heap Growth must be page-aligned");
+        }
+        final boolean committed = Heap.AvoidsAnonOperations || VirtualMemory.uncommitMemory(newCommittedEnd, delta, VirtualMemory.Type.HEAP);
+        if (committed) {
             committedEnd = newCommittedEnd;
             return true;
         }
@@ -103,5 +122,11 @@ public class ContiguousHeapSpace extends MemoryRegion {
     }
     public boolean canGrow() {
         return committedEnd.lessThan(end());
+    }
+
+    public void doBeforeGC() {
+    }
+
+    public void doAfterGC() {
     }
 }
