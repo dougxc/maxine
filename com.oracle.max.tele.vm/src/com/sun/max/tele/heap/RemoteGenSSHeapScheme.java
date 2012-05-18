@@ -614,7 +614,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
         }
 
         public TeleCardTableRSet readTeleCardTableRSet() {
-            final Reference cardTableRSetReference = fields().GenSSHeapScheme_cardTableRSet.readReference(getReference());
+            final Reference cardTableRSetReference = fields().GenSSHeapScheme_cardTableRSet.readReference(reference());
             if (cardTableRSetReference.isZero()) {
                 return null;
             }
@@ -622,7 +622,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
         }
 
         public TeleContiguousHeapSpace readTeleYoungSpace() {
-            final Reference youngSpaceReference = fields().GenSSHeapScheme_youngSpace.readReference(getReference());
+            final Reference youngSpaceReference = fields().GenSSHeapScheme_youngSpace.readReference(reference());
             if (youngSpaceReference.isZero()) {
                 return null;
             }
@@ -631,7 +631,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
 
         public TeleContiguousHeapSpace readTeleOldToSpace() {
             if (oldSpaceReference.isZero()) {
-                oldSpaceReference = fields().GenSSHeapScheme_oldSpace.readReference(getReference());
+                oldSpaceReference = fields().GenSSHeapScheme_oldSpace.readReference(reference());
                 if (oldSpaceReference.isZero()) {
                     return null;
                 }
@@ -641,7 +641,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
 
         public TeleContiguousHeapSpace readTeleOldFromSpace() {
             if (oldSpaceReference.isZero()) {
-                oldSpaceReference = fields().GenSSHeapScheme_oldSpace.readReference(getReference());
+                oldSpaceReference = fields().GenSSHeapScheme_oldSpace.readReference(reference());
                 if (oldSpaceReference.isZero()) {
                     return null;
                 }
@@ -650,7 +650,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
         }
 
         private TeleBaseAtomicBumpPointerAllocator readTeleBumpAllocator(TeleInstanceReferenceFieldAccess spaceFieldAccess) {
-            Reference spaceReference = spaceFieldAccess.readReference(getReference());
+            Reference spaceReference = spaceFieldAccess.readReference(reference());
             if (spaceReference.isZero()) {
                 return null;
             }
@@ -666,7 +666,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
         }
 
         public int fullCollectionCount() {
-            return fields().GenSSHeapScheme_fullCollectionCount.readInt(getReference());
+            return fields().GenSSHeapScheme_fullCollectionCount.readInt(reference());
         }
 
         /**
@@ -674,7 +674,7 @@ public final class RemoteGenSSHeapScheme extends AbstractRemoteHeapScheme implem
          * @return an address in the To-space of the old generation.
          */
         public Address firstEvacuatedMark() {
-            return  fields().EvacuatorToCardSpace_allocatedRangeStart.readWord(fields().GenSSHeapScheme_youngSpaceEvacuator.readReference(getReference())).asAddress();
+            return  fields().EvacuatorToCardSpace_allocatedRangeStart.readWord(fields().GenSSHeapScheme_youngSpaceEvacuator.readReference(reference())).asAddress();
         }
     }
 }
