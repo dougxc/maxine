@@ -79,9 +79,9 @@ public final class MemoryView extends AbstractView<MemoryView> {
                 new AddressInputDialog(inspection(), Address.zero(), "View RegionInfo for address...", "View") {
                     @Override
                     public void entered(Address address) {
-                        MaxMemoryManagementInfo info = vm().getMemoryManagementInfo(address);
+                        MaxMemoryManagementInfo info = vm().heap().getMemoryManagementInfo(address);
                         // TODO: revisit this.
-                        if (info.status().equals(MaxMemoryStatus.LIVE)) {
+                        if (info.status().equals(MaxMemoryManagementStatus.LIVE)) {
                             final MaxObject object = info.tele();
                             focus().setHeapObject(object);
                         } else {
@@ -103,7 +103,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
 
                         @Override
                         public void entered(Address address) {
-                            final InspectorMemoryRegion newRegion = new InspectorMemoryRegion(inspection.vm(), null, address, inspection.vm().platform().nBytesInWord() * 10);
+                            final AbstractMemoryRegion newRegion = new FixedMemoryRegion(inspection, null, address, inspection.vm().platform().nBytesInWord() * 10);
                             makeView(newRegion, null).highlight();
                         }
                     };
@@ -115,8 +115,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
         }
 
         public MemoryView makeView(MaxMemoryRegion memoryRegion, String regionName) {
-            final String name = regionName == null ? memoryRegion.regionName() : regionName;
-            final MemoryView memoryView = new MemoryView(inspection(), memoryRegion, name, memoryRegion.start(), ViewMode.WORD, null);
+            final MemoryView memoryView = new MemoryView(inspection(), memoryRegion, regionName, memoryRegion.start(), ViewMode.WORD, null);
             notifyAddingView(memoryView);
             return memoryView;
         }
@@ -134,13 +133,13 @@ public final class MemoryView extends AbstractView<MemoryView> {
         }
 
         public MemoryView makeView(Address address) {
-            final MemoryView memoryView = new MemoryView(inspection(), new InspectorMemoryRegion(vm(), "", address, vm().platform().nBytesInWord()), null, address, ViewMode.WORD, null);
+            final MemoryView memoryView = new MemoryView(inspection(), new FixedMemoryRegion(inspection(), "", address, vm().platform().nBytesInWord()), null, address, ViewMode.WORD, null);
             notifyAddingView(memoryView);
             return memoryView;
         }
 
         public MemoryView makePageView(Address address) {
-            final MemoryView memoryView = new MemoryView(inspection(), new InspectorMemoryRegion(vm(), "", address, vm().platform().nBytesInPage()), null, address, ViewMode.PAGE, null);
+            final MemoryView memoryView = new MemoryView(inspection(), new FixedMemoryRegion(inspection(), "", address, vm().platform().nBytesInPage()), null, address, ViewMode.PAGE, null);
             notifyAddingView(memoryView);
             return memoryView;
         }
@@ -307,7 +306,14 @@ public final class MemoryView extends AbstractView<MemoryView> {
 
     // Current view specifications.
     private MemoryWordRegion memoryWordRegion;
-    private String regionName;  // null if current region is specially named
+    private Address memoryWordRegionStart;
+
+    /**
+     * The name of the region to display.  If {@code null}, always use the name of the region.  If the empty string, then synthesize a name.
+     */
+    private String regionName;
+
+
     // Current view mode held in the ComboBox, which gets retained and reused across view reconstructions.
 
     // Address of word 0 for the purposes of the Offset columns.
@@ -333,7 +339,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
 
     /**
      * @param memoryRegion the region to view
-     * @param regionName name to use for the region
+     * @param regionName name to use for the region, use region's name if {@code null}, synthesize a name if {@code ""}
      * @param origin where to set the origin of the view, not necessarily at the start
      * @param viewMode initial mode for the view
      * @param instanceViewPreferences preferences to use for this view
@@ -356,10 +362,14 @@ public final class MemoryView extends AbstractView<MemoryView> {
             this.instanceViewPreferences = new MemoryViewPreferences(instanceViewPreferences, this);
         }
         Address start = memoryRegion.start();
-        final Address alignedStart = start.alignUp(nBytesInWord);
-        start = (start.equals(alignedStart)) ? start : alignedStart.minus(nBytesInWord);
-        final long wordCount = wordsInRegion(memoryRegion);
-        this.originalMemoryWordRegion = new MemoryWordRegion(inspection.vm(), start, wordCount);
+        if (start.isWordAligned()) {
+            this.originalMemoryWordRegion = new MemoryWordRegion(inspection(), memoryRegion);
+        } else {
+            final Address alignedStart = start.alignUp(nBytesInWord);
+            start = (start.equals(alignedStart)) ? start : alignedStart.minus(nBytesInWord);
+            final long wordCount = wordsInRegion(memoryRegion);
+            this.originalMemoryWordRegion = new MemoryWordRegion(null, start, wordCount);
+        }
         this.memoryWordRegion = originalMemoryWordRegion;
         this.originalOrigin = (origin == null) ? start : origin;
         this.originalRegionName = regionName;
@@ -391,8 +401,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
                 } else if (newWordCount != oldWordCount) {
                     // User model policy:  any adjustment to the region drops into generic word mode
                     clearViewMode();
-                    final MaxVM vm = MemoryView.this.vm();
-                    setMemoryRegion(new MemoryWordRegion(vm, memoryRegion.start(), newWordCount));
+                    setMemoryRegion(new MemoryWordRegion(inspection(), memoryRegion.start(), newWordCount));
                     setTitle();
                 }
             }
@@ -473,6 +482,8 @@ public final class MemoryView extends AbstractView<MemoryView> {
 
     @Override
     protected void createViewContent() {
+
+        memoryWordRegionStart = memoryWordRegion.start();
 
         table = new MemoryWordsTable(inspection(), this, memoryWordRegion, origin, instanceViewPreferences, setOriginToSelectionAction);
 
@@ -667,7 +678,9 @@ public final class MemoryView extends AbstractView<MemoryView> {
                 titleBuilder.append(regionDescription);
                 break;
             case WORD:
-                if (regionName == null || regionName.equals("")) {
+                if (regionName == null) {
+                    titleBuilder.append(memoryWordRegion.regionName());
+                } else if (regionName.equals("")) {
                     titleBuilder.append("Memory: ").append(memoryWordRegion.start().toHexString()).append("--").append(memoryWordRegion.end().toHexString());
                     titleBuilder.append(regionDescription);
                 } else {
@@ -683,7 +696,15 @@ public final class MemoryView extends AbstractView<MemoryView> {
 
     @Override
     protected void refreshState(boolean force) {
-        table.refresh(force);
+        if (memoryWordRegion.start().equals(memoryWordRegionStart)) {
+            table.refresh(force);
+        } else if (viewMode() == ViewMode.WORD) {
+            // In Word mode, showing a region that has just moved.
+            // The table will update automatically, we just need to reset the UI state here
+            memoryWordRegionStart = memoryWordRegion.start();
+            origin = memoryWordRegionStart;
+            originField.setText(origin.toUnsignedString(16));
+        }
         setTitle();
     }
 
@@ -784,7 +805,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
     private void growRegionUp(long addedRowCount) {
         final long newWordCount = memoryWordRegion.nWords() + addedRowCount;
         final Address newStart = memoryWordRegion.start().minus(nBytesInWord * addedRowCount);
-        setMemoryRegion(new MemoryWordRegion(vm(), newStart, newWordCount));
+        setMemoryRegion(new MemoryWordRegion(inspection(), newStart, newWordCount));
         table.scrollToBeginning();
         // User model policy:  any adjustment to the region drops into generic word mode
         clearViewMode();
@@ -797,7 +818,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
     private void growRegionDown(long rowCapacity) {
         final long newWordCount = memoryWordRegion.nWords() + rowCapacity;
 
-        setMemoryRegion(new MemoryWordRegion(vm(), memoryWordRegion.start(), newWordCount));
+        setMemoryRegion(new MemoryWordRegion(inspection(), memoryWordRegion.start(), newWordCount));
         table.scrollToEnd();
         // User model policy:  any adjustment to the region drops into generic word mode
         clearViewMode();
@@ -815,7 +836,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
             final Address start = objectMemoryRegion.start().alignUp(nBytesInWord);
             // User model policy, grow the size of the viewing region if needed, but never shrink it.
             final long newWordCount = Math.max(wordsInRegion(objectMemoryRegion), memoryWordRegion.nWords());
-            setMemoryRegion(new MemoryWordRegion(vm(), start, newWordCount));
+            setMemoryRegion(new MemoryWordRegion(inspection(), start, newWordCount));
             setOrigin(object.origin());
             table.scrollToOrigin();
             setTitle();
@@ -831,7 +852,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
             final Address start = objectMemoryRegion.start().alignUp(nBytesInWord);
             // User model policy, grow the size of the viewing region if needed, but never shrink it.
             final long newWordCount = Math.max(wordsInRegion(objectMemoryRegion), memoryWordRegion.nWords());
-            setMemoryRegion(new MemoryWordRegion(vm(), start, newWordCount));
+            setMemoryRegion(new MemoryWordRegion(inspection(), start, newWordCount));
             setOrigin(object.origin());
             table.scrollToOrigin();
             setTitle();
@@ -850,7 +871,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
                 // Grow the end of the viewed region if needed to include the newly found object
                 newWordCount = objectMemoryRegion.end().minus(start).dividedBy(nBytesInWord).toInt();
             }
-            setMemoryRegion(new MemoryWordRegion(vm(), start, newWordCount));
+            setMemoryRegion(new MemoryWordRegion(inspection(), start, newWordCount));
             setOrigin(object.origin());
             // Scroll so that whole object is visible if possible
             table.scrollToRange(origin, objectMemoryRegion.end().minus(nBytesInWord));
@@ -865,7 +886,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
             newOrigin = newOrigin.minus(nBytesInPage);
         }
         setOrigin(newOrigin);
-        setMemoryRegion(new MemoryWordRegion(vm(), newOrigin, nWordsInPage));
+        setMemoryRegion(new MemoryWordRegion(inspection(), newOrigin, nWordsInPage));
         table.scrollToBeginning();
         setTitle();
     }
@@ -877,7 +898,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
             nextOrigin = nextOrigin.plus(nBytesInPage);
         }
         setOrigin(nextOrigin);
-        setMemoryRegion(new MemoryWordRegion(vm(), nextOrigin, nWordsInPage));
+        setMemoryRegion(new MemoryWordRegion(inspection(), nextOrigin, nWordsInPage));
         table.scrollToBeginning();
         setTitle();
     }
@@ -885,7 +906,7 @@ public final class MemoryView extends AbstractView<MemoryView> {
     private void moveToPreviousPage() {
         final Address newOrigin = origin.alignUp(nBytesInPage).minus(nBytesInPage);
         setOrigin(newOrigin);
-        setMemoryRegion(new MemoryWordRegion(vm(), newOrigin, nWordsInPage));
+        setMemoryRegion(new MemoryWordRegion(inspection(), newOrigin, nWordsInPage));
         table.scrollToBeginning();
         setTitle();
     }
