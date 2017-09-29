@@ -28,19 +28,17 @@ import java.lang.reflect.*;
 import java.nio.*;
 import java.util.*;
 
-import sun.misc.*;
-
 import com.sun.max.program.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.jdk.*;
-import com.sun.max.vm.jdk.JDK.ClassRef;
-import com.sun.max.vm.jdk.JDK.LazyClassRef;
+import com.sun.max.vm.jdk.JDK.*;
 import com.sun.max.vm.layout.*;
-import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
+
+import sun.misc.*;
 
 /**
  * This class encapsulates a number of mechanisms for intercepting certain parts of JDK
@@ -112,7 +110,7 @@ public final class JDKInterceptor {
             cons.setAccessible(true);
             lib = cons.newInstance(MaxineVM.class, "maxvm");
         } catch (Exception e) {
-            throw FatalError.unexpected("Could not construct VM native library", e);
+            throw new Error("Could not construct VM native library", e);
         }
         systemNativeLibraries.add(lib);
     }

@@ -1088,6 +1088,9 @@ def abort(codeOrMessage):
         else:
             _kill_process_group(p.pid)
 
+    if _opts and hasattr(_opts, 'verbose') and _opts.verbose:
+        import traceback
+        traceback.print_stack()
     raise SystemExit(codeOrMessage)
 
 def download(path, urls, verbose=False):
